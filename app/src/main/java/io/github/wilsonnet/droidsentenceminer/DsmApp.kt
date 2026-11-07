@@ -49,6 +49,13 @@ class AppContainer(private val context: Context) {
     val db: DictDatabase by lazy { DictDatabase.build(context) }
     val prefs: DsmPrefs by lazy { DsmPrefs(context) }
     val lookup: TermLookup by lazy { TermLookup(db) }
+    val aiSettings by lazy { io.github.wilsonnet.droidsentenceminer.ai.AiSettingsStore(context) }
+    val aiExplanations by lazy { io.github.wilsonnet.droidsentenceminer.ai.AiExplanationService(aiSettings) }
+
+    suspend fun scanText(text: String) = lookup.scan(text, language = prefs.studyLanguage.first())
+    suspend fun wordRange(text: String, index: Int) = lookup.wordAt(text, index, language = prefs.studyLanguage.first())
+    suspend fun lookupWord(word: String) = lookup.lookup(word, language = prefs.studyLanguage.first())
+
     val importer: YomitanImporter by lazy { YomitanImporter(context, db) }
     val dictDownloader: DictDownloader by lazy { DictDownloader() }
     val appUpdater by lazy { io.github.wilsonnet.droidsentenceminer.update.AppUpdater(context, appScope, prefs) }

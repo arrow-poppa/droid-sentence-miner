@@ -17,6 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Book
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
@@ -131,6 +132,12 @@ fun SettingsScreen(modifier: Modifier = Modifier, onOpen: (String) -> Unit = {})
             "Anki",
             "Backend, deck, note type and fields" + if (ankiDeck.isNotBlank()) " · deck: $ankiDeck" else "",
         ) { onOpen(io.github.wilsonnet.droidsentenceminer.PAGE_ANKI) }
+        SettingsLink(
+            icon = Icons.Default.Settings,
+            title = "AI explanations",
+            subtitle = "Bring your own key · providers, prompts and streaming",
+        ) { onOpen(io.github.wilsonnet.droidsentenceminer.PAGE_AI) }
+
 
         StudyLanguageCard(container)
 

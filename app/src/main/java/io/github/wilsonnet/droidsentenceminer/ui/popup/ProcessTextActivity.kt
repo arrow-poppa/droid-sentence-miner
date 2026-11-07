@@ -79,7 +79,7 @@ class ProcessTextActivity : ComponentActivity() {
                 selected = trimmed
                 matches = emptyList()
             } else {
-                val scanned = container.lookup.scan(trimmed)
+                val scanned = container.scanText(trimmed)
                 matches = scanned
                 selected = scanned.firstOrNull()?.text
             }

@@ -54,7 +54,7 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             DsmTheme {
-                AppRoot()
+                AppRoot(openAi = intent?.getBooleanExtra("open_ai_settings", false) == true)
             }
         }
     }
@@ -80,13 +80,13 @@ private val TABS = listOf(
 )
 
 @Composable
-private fun AppRoot() {
-    var tab by rememberSaveable { mutableIntStateOf(0) }
+private fun AppRoot(openAi: Boolean = false) {
+    var tab by rememberSaveable { mutableIntStateOf(if (openAi) 3 else 0) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val sharedPhoto by remember { AppContainer.from(context).sharedBookPhoto }.collectAsState()
     androidx.compose.runtime.LaunchedEffect(sharedPhoto) { if (sharedPhoto != null) tab = 1 }
     // Dictionaries and Anki setup live under Settings; null = the settings list itself.
-    var settingsPage by rememberSaveable { mutableStateOf<String?>(null) }
+    var settingsPage by rememberSaveable { mutableStateOf<String?>(if (openAi) PAGE_AI else null) }
     // Tablets and landscape phones: tabs in a side rail, so the bottom bar doesn't eat the short side.
     val wide = LocalConfiguration.current.screenWidthDp >= 600
     val select = { index: Int ->
@@ -133,6 +133,7 @@ private fun AppRoot() {
                 else -> ReadableWidth(modifier) { inner ->
                     when (settingsPage) {
                         PAGE_DICTIONARIES -> SettingsSubPage({ settingsPage = null }, inner) { DictionaryScreen(it) }
+                        PAGE_AI -> io.github.wilsonnet.droidsentenceminer.ui.screens.AiSettingsScreen({ settingsPage = null }, inner)
                         PAGE_ANKI -> SettingsSubPage({ settingsPage = null }, inner) { AnkiScreen(it) }
                         else -> SettingsScreen(inner, onOpen = { settingsPage = it })
                     }
@@ -144,6 +145,7 @@ private fun AppRoot() {
 
 const val PAGE_DICTIONARIES = "dictionaries"
 const val PAGE_ANKI = "anki"
+const val PAGE_AI = "ai"
 
 @Composable
 private fun SettingsSubPage(

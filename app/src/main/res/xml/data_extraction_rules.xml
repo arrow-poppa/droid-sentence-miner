@@ -2,8 +2,13 @@
 <data-extraction-rules>
     <cloud-backup>
         <include domain="sharedpref" path="." />
+        <!-- BYOK AI: encrypted API keys and AI settings (AiSettingsStore) are never backed up. -->
+        <exclude domain="file" path="datastore/ai_secrets.preferences_pb" />
+        <exclude domain="file" path="datastore/ai_settings.preferences_pb" />
     </cloud-backup>
     <device-transfer>
         <include domain="sharedpref" path="." />
+        <exclude domain="file" path="datastore/ai_secrets.preferences_pb" />
+        <exclude domain="file" path="datastore/ai_settings.preferences_pb" />
     </device-transfer>
 </data-extraction-rules>

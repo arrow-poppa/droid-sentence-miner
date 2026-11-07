@@ -106,8 +106,8 @@ class ScreenDictionary(
         setLayer(newLines)
         scope.launch {
             val (line, range) = newLines.withIndex().firstNotNullOfOrNull { (i, l) ->
-                container.lookup.scan(l.text).firstOrNull()?.let { i to (it.start until it.end) }
-            } ?: (0 to container.lookup.wordAt(newLines[0].text, 0))
+                container.scanText(l.text).firstOrNull()?.let { i to (it.start until it.end) }
+            } ?: (0 to container.wordRange(newLines[0].text, 0))
             if (quickActive) show(line, range)
         }
     }
@@ -171,7 +171,7 @@ class ScreenDictionary(
         val glyph = target.glyphs.getOrNull(index) ?: return
         val seq = ++tapSeq
         scope.launch {
-            val range = container.lookup.wordAt(target.text, index)
+            val range = container.wordRange(target.text, index)
             show(line, range)
             if (quickActive) return@launch // read from a fresh frame just now, and auto OCR's areas are elsewhere
             delay(VERIFY_DELAY_MS) // let the pause take effect so the frame is the one being looked at
@@ -187,7 +187,7 @@ class ScreenDictionary(
             }
             val (freshLine, freshIndex) = hit
             val freshText = fresh[freshLine].text
-            val freshRange = container.lookup.wordAt(freshText, freshIndex)
+            val freshRange = container.wordRange(freshText, freshIndex)
             if (freshText.substring(freshRange) == target.text.substring(range.first, min(range.last, target.text.lastIndex) + 1)) return@launch
             if (seq != tapSeq || !popupOpen) return@launch
             setLayer(fresh)
@@ -222,7 +222,7 @@ class ScreenDictionary(
     fun lookupInLiveLine(tap: CharTap) {
         val seq = ++tapSeq
         scope.launch {
-            val range = container.lookup.wordAt(tap.text, tap.index)
+            val range = container.wordRange(tap.text, tap.index)
             val last = min(range.last, tap.text.lastIndex)
             if (range.first > last || seq != tapSeq) return@launch
             dismiss(resumeLater = true)

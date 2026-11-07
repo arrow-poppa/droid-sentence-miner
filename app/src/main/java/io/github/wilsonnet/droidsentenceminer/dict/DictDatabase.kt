@@ -219,6 +219,14 @@ interface TermDao {
     @Query("SELECT id, glossaryJson, sequence, termTags FROM terms WHERE id IN (:ids)")
     suspend fun findBodies(ids: List<Long>): List<TermBody>
 
+    /**
+     * Whether any row of [dictId] has a non-empty `rules` column. False = a part-of-speech-less
+     * dictionary (BUG-2543 in Fushi): the multilingual lookup then accepts deinflected candidates
+     * for it. Scans the whole dictionary when the answer is false, so callers cache it.
+     */
+    @Query("SELECT EXISTS(SELECT 1 FROM terms WHERE dictId = :dictId AND rules != '' LIMIT 1)")
+    suspend fun hasRules(dictId: Long): Boolean
+
     @Query(
         """
         SELECT t.* FROM terms t

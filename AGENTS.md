@@ -46,6 +46,14 @@ git -c credential.helper= -c credential.helper='!gh auth git-credential' \
   push https://github.com/WilsonNet/droid-sentence-miner.git main
 ```
 
+## Resource policy for this workspace
+
+Builds, compilation and Gradle tests run **only on GitHub Actions** (`.github/workflows/ci.yml`).
+The development PC has 9.5 GB RAM: never run Gradle, Kotlin compilation, or emulator builds here.
+Push the implementation branch to `origin` (the `arrow-poppa` fork), inspect `gh run view`, and
+retrieve the CI APK for physical-device validation. Do not push this feature to upstream `main`.
+Current implementation contracts and verification status: [docs/integration-state.md](docs/integration-state.md).
+
 ## Toolchain
 
 Linux (current dev box, no sudo needed — everything lives under `~/Android`):
@@ -79,8 +87,9 @@ AnkiDroid API v2.24.1 (JitPack). APK ships arm64-v8a, armeabi-v7a and x86_64 onl
 ## Common commands
 
 ```bash
-# Build + unit tests
-$GRADLE testDebugUnitTest assembleDebug --console=plain
+# Build + unit tests: GitHub Actions only; do not execute Gradle locally.
+gh workflow run ci.yml --ref feature/multilingual-ocr-parser-byok -R arrow-poppa/droid-sentence-miner
+gh run list -R arrow-poppa/droid-sentence-miner --workflow ci.yml --limit 5
 
 # NEVER launch an Android emulator! It kills the host machine. Always test on the physical device
 # (Xiaomi Pad 7 `c2bd6564` or Galaxy phone). If the tablet is locked (`mInputRestricted=true` in
@@ -540,7 +549,8 @@ See `.opencode/skills/dsm-debug-api/SKILL.md` for the full reference and recipes
 
 ```
 app/src/main/java/io/github/wilsonnet/droidsentenceminer/
-├── dict/      Yomitan import, Room storage, deinflector, lookup, glossary rendering
+├── ai/        BYOK providers, encrypted credentials, streaming and bounded explanation cache
+├── dict/      Yomitan import, Room storage, language parsers, lookup, glossary rendering
 ├── ocr/       meikiocr (ONNX) + ML Kit engines, preprocessing, GSM-style post-processing
 ├── capture/   MediaProjection capture, auto OCR loop, text areas
 ├── textlog/   Text log DB, line tracker/consensus, clip windows

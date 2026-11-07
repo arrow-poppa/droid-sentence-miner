@@ -32,6 +32,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -255,7 +256,7 @@ private fun recursiveTap(stack: MutableList<LookupEntry>): (String, String) -> U
     return { text, sentence ->
         if (text.isNotEmpty() && TermLookup.isLookupable(text[0])) {
             scope.launch {
-                val first = container.lookup.scan(text).firstOrNull { it.start == 0 } ?: return@launch
+                val first = container.scanText(text).firstOrNull { it.start == 0 } ?: return@launch
                 if (first.text != stack.last().word) stack += LookupEntry(first.text, sentence.take(300))
             }
         }
@@ -308,9 +309,10 @@ private enum class EntryState(val js: String) {
 private fun rememberWordLookup(word: String, dark: Boolean): WordLookupState {
     val context = LocalContext.current
     val container = remember { AppContainer.from(context) }
-    val state = remember(word) { WordLookupState() }
-    LaunchedEffect(word) {
-        val result = container.lookup.lookup(word)
+    val language by container.prefs.studyLanguage.collectAsState(initial = "ja")
+    val state = remember(word, language, dark) { WordLookupState() }
+    LaunchedEffect(word, language, dark) {
+        val result = container.lookup.lookup(word, language = language)
         state.details = result
         state.html = container.miner.buildPopupHtml(word, result, dark)
         state.loading = false
@@ -547,6 +549,7 @@ fun WordLookupDialog(
             // No verticalScroll here: the WebView scrolls itself, and an outer scroll fought it for drags.
             Column(Modifier.heightIn(max = 420.dp)) {
                 LookupBody(state, dark, maxHeight = 360.dp, onTextTap = onTap, onEntryMine = { mine(it, null) }, onEntryEdit = edit)
+                LookupAiExplanation(entry.word, entry.sentence, state.details, state.loading)
                 state.status?.let {
                     Spacer(Modifier.size(8.dp))
                     Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
@@ -694,8 +697,11 @@ fun WordLookupCard(
             Spacer(Modifier.size(4.dp))
             // The rest of the card, whatever the header took: a fixed guess for the header clipped the
             // bottom of the definition when the header was taller (deinflection line, error, back).
-            Box(Modifier.weight(1f, fill = false).padding(end = 8.dp)) {
-                LookupBody(state, dark, maxHeight = maxHeight, onTextTap = onTap, onEntryMine = { mine(it, null) }, onEntryEdit = edit)
+            Column(Modifier.weight(1f, fill = false).padding(end = 8.dp)) {
+                Box(Modifier.weight(1f, fill = false)) {
+                    LookupBody(state, dark, maxHeight = maxHeight, onTextTap = onTap, onEntryMine = { mine(it, null) }, onEntryEdit = edit)
+                }
+                LookupAiExplanation(entry.word, entry.sentence, state.details, state.loading)
             }
         }
     }

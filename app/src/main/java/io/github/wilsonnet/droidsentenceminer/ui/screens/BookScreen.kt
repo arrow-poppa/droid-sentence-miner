@@ -281,7 +281,7 @@ private fun BlockCard(page: BookPage, index: Int, onPrev: () -> Unit, onNext: ()
     var textOrigin by remember { mutableStateOf(Offset.Zero) }
     val haptics = LocalHapticFeedback.current
 
-    LaunchedEffect(block) { words = container.lookup.scan(block.text) }
+    LaunchedEffect(block) { words = container.scanText(block.text) }
 
     val highlight = MaterialTheme.colorScheme.primaryContainer
     val selecting = MaterialTheme.colorScheme.tertiaryContainer

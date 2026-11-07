@@ -978,7 +978,7 @@ class OverlayService : Service() {
             return ScanOutcome(text, result.elapsedMs, 0, status)
         }
 
-        val matches = container.lookup.scan(text)
+        val matches = container.scanText(text)
         panelState.ocrText = text
         panelState.matches = matches
         panelState.scanning = false
@@ -1121,7 +1121,7 @@ class OverlayService : Service() {
                 return@launch
             }
             panelState.ocrText = line.text
-            panelState.matches = container.lookup.scan(line.text)
+            panelState.matches = container.scanText(line.text)
             panelState.lineId = line.id
             lastCapture = container.textLog.screenshot(line)
             val clip = container.textLog.clip(line)
@@ -1137,7 +1137,7 @@ class OverlayService : Service() {
         panelState.definitionsHtml = null
         panelState.loadingDetails = true
         scope.launch {
-            val details = container.lookup.lookup(word)
+            val details = container.lookupWord(word)
             val html = container.miner.buildPopupHtml(word, details, isDarkMode(), cardPicker = false)
             panelState.selectedDetails = details
             panelState.definitionsHtml = html

@@ -2,6 +2,10 @@
 
 [← README](../README.md) · [Features](features.md) · [Usage](usage.md) · [Architecture](architecture.md) · [Building](building.md) · [Validation](validation.md) · [Roadmap](roadmap.md)
 
+## Multilingual implementation branch
+
+For multilingual mining, select the study language in Settings separately from the OCR engine/script. Download the chosen Paddle models or request the ML Kit modules as needed. Configure AI in Settings → AI explanations; enabling AI and tapping Explain sends the selected word and sentence to that provider. See [multilingual setup](multilingual.md).
+
 Step by step from a fresh install. The website has the same flow with screenshots: [docs](https://wilsonnet.github.io/droid-sentence-miner/docs/getting-started/installation/).
 
 ## Requirements

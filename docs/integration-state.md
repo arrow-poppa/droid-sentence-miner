@@ -18,14 +18,9 @@ All three are GPL-3.0, as is DSM. Keep attribution comments on ported files.
 
 ## Ownership
 
-| Track | Owner | Branch | Files |
-|---|---|---|---|
-| M1–M3 OCR (language profiles, ML Kit 5 scripts, PaddleOCR ONNX) + all integration | architect | `feature/multilingual-ocr-parser-byok` | `ocr/**`, `capture/**`, `core/Prefs.kt`, `DsmApp.kt`, `overlay/**`, `ui/**` except below, gradle files, manifest, docs |
-| M4 multilingual parser | worker A | `feature/mlang-parser` | `dict/lang/**` (new), `dict/TermLookup.kt`, DAO *queries* in `dict/DictDatabase.kt` (no schema change), `app/src/test/.../dict/**` |
-| M5 BYOK AI explanations | worker B | `feature/byok-ai` | `ai/**` (new), `ui/screens/AiSettingsScreen.kt` (new), `ui/components/AiExplanationSection.kt` (new), `app/src/test/.../ai/**`, `res/xml/backup_rules.xml`, `res/xml/data_extraction_rules.xml` |
-
-Never change Room entities/version of `dict.db`: it uses destructive migration (would wipe
-dictionaries). Workers do not edit shared files outside their row; the architect merges.
+Codex integrates the existing OCR commit and recovered parser/BYOK work directly in the main
+implementation checkout. Source worker worktrees are preserved. No additional agents are needed.
+The prior Claude session reached its usage limit; do not assume an active review or handoff.
 
 ## Contracts
 
@@ -38,7 +33,19 @@ dictionaries). Workers do not edit shared files outside their row; the architect
 
 ## Status
 
-- [x] CI workflow, baseline
-- [x] PaddleOCR desktop reference (`tools/paddle-ocr/reference.py`): 9/9 fixtures exact, FP32 models
-- [ ] M1 language profiles / Japanese gates · [ ] M2 ML Kit · [ ] M3 Paddle ONNX
-- [ ] M4 parser (worker A) · [ ] M5 BYOK (worker B) · [ ] M6 other engines · [ ] M7 hardening
+- CI baseline: `0a66b24`, success. OCR commit `a76627d`: APK compiled, 239 tests, 1 failed
+  (`MlKitLanguageCatalogTest`: expected support counts were wrong; catalog has 37/16/122).
+- M1–M3 code present: text profiles, five ML Kit scripts, PaddleOCR ONNX/model manager and settings.
+  Physical Android recognition and geometry are **not verified** by desktop model tests.
+- M4 recovered from the parser worktree: language parsers and fake-store behavioral tests.
+- M5 recovered from `007af79` plus uncommitted UI/tests in the AI worktree; integrated native
+  settings and popup explanation section. Remote calls remain opt-in.
+- Application scan/tap/lookup/mining entry points now pass `studyLanguage`.
+- Combined CI validation pending. See [multilingual.md](multilingual.md) for capabilities and gaps.
+- M6 optional backends and NCNN remain unimplemented and absent from the engine picker.
+
+## Next verification
+
+Push this branch, inspect the CI unit tests and debug APK, fix failures, then record exact results.
+Device-only OCR/overlay/Anki checks must use a connected physical device and a CI-built APK.
+No local builds, no release tag, no upstream merge.

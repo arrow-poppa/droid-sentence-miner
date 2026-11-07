@@ -2,6 +2,10 @@
 
 [← README](../README.md) · [Features](features.md) · [Usage](usage.md) · [Architecture](architecture.md) · [Building](building.md) · [Validation](validation.md) · [Roadmap](roadmap.md)
 
+## Multilingual implementation branch
+
+The implementation branch adds multilingual OCR, language-aware lookup and optional BYOK explanations. See [multilingual support and limitations](multilingual.md).
+
 Everything the app does, in detail. The short version is in the [README](../README.md).
 
 - **Auto OCR mode** — draw boxes over the game's text areas once (dialogue box, name box,

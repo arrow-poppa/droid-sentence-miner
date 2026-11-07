@@ -47,7 +47,7 @@ class CardMiner(
         wordAudioFetch: Deferred<WordAudio.Clip?>? = null,
     ): AnkiCard = withContext(Dispatchers.Default) {
         val snapshot = prefs.snapshot()
-        val resolved = details ?: lookup.lookup(word)
+        val resolved = details ?: lookup.lookup(word, language = prefs.studyLanguage.first())
         val wordAudioJob = wordAudioFetch ?: async { fetchWordAudio(word, resolved) }
         val dicts = db.dictionaryDao().getEnabled().associateBy { it.id }
 
@@ -215,7 +215,7 @@ class CardMiner(
         val t0 = android.os.SystemClock.elapsedRealtime()
         // Word audio is network-bound and the clip encode CPU-bound: start the fetch first so the
         // two overlap (encoding a few seconds of audio took 1.6 s with Nightshade running).
-        val resolved = details ?: lookup.lookup(word)
+        val resolved = details ?: lookup.lookup(word, language = prefs.studyLanguage.first())
         val wordAudioFetch = async(Dispatchers.IO) { fetchWordAudio(word, resolved) }
         val segment = when {
             edits != null -> edits.audio

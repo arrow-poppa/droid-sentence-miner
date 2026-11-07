@@ -129,3 +129,10 @@ Droid Sentence Miner is not affiliated with Anki, AnkiDroid, Yomitan, Jiten or G
 
 [GPL-3.0](LICENSE). The adapted Yomihon deinflector remains available under its Apache-2.0 license
 wherever required; see the file header for details.
+
+Multilingual development is tracked on `feature/multilingual-ocr-parser-byok`; see
+[capabilities and validation gaps](docs/multilingual.md). Parser/OCR adaptations draw on
+[Chimahon](https://github.com/arrow-poppa/chimahon), English matching on
+[Fushi](https://github.com/arrow-poppa/Fushi), and BYOK on
+[Yomitan BYOK](https://github.com/arrow-poppa/yomitan-byok-ai) (GPL-3.0).
+PaddlePaddle's pinned OCR artifacts are downloaded on demand (Apache-2.0).

@@ -2,6 +2,10 @@
 
 [← README](../README.md) · [Features](features.md) · [Usage](usage.md) · [Architecture](architecture.md) · [Building](building.md) · [Validation](validation.md) · [Roadmap](roadmap.md)
 
+## Multilingual implementation branch
+
+Multilingual continuation: the previous OCR CI run [42410311434](https://github.com/arrow-poppa/droid-sentence-miner/actions/runs/42410311434) compiled the APK and ran 239 tests with one catalog-count failure. The combined parser/BYOK integration is awaiting CI; no local compilation or Android runtime benchmarks have been run in this continuation.
+
 What was measured, on which device, and how. Recipes and scripts: [`.opencode/skills/dsm-ocr-eval`](../.opencode/skills/dsm-ocr-eval/SKILL.md), [`dsm-audio`](../.opencode/skills/dsm-audio/SKILL.md), [`dsm-debug-api`](../.opencode/skills/dsm-debug-api/SKILL.md), `tools/`.
 
 - Lookup speed with 8 dictionaries (~2.1 M rows: Jitendex, Kanjium, Pixiv, 広辞苑, 三省堂, 実用日本語表現,

@@ -6,6 +6,16 @@ versions are the `v*` tags that publish a signed APK on
 
 ## [Unreleased]
 
+### Added
+- Independent study-language, OCR engine and script/model settings; all five ML Kit script recognizers and an official language catalog.
+- On-demand, checksum-verified PaddleOCR ONNX models for Latin, Chinese/Japanese, Cyrillic, Arabic, Greek and Korean (Android inference validation pending).
+- Language-aware dictionary selection and morphology, including English irregulars, phrasal verbs and dictionary-validated hyphenated compounds; original text offsets are retained.
+- Optional BYOK explanations in lookup popups: OpenAI, Gemini, DeepSeek, OpenRouter and custom compatible endpoints, streaming, cancellation, cache and encrypted API keys.
+
+### Fixed
+- Non-Japanese OCR results can appear in the tappable screen layer; lookup and mining use the selected study language.
+- Corrected the ML Kit catalog support-category regression test.
+
 ## [0.5.1] — 2026-10-31
 
 ### Changed

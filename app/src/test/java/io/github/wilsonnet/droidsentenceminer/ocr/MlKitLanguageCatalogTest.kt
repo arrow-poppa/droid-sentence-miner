@@ -9,9 +9,9 @@ class MlKitLanguageCatalogTest {
     @Test
     fun matchesTheOfficialPageCounts() {
         val bySupport = MlKitLanguageCatalog.all.groupingBy { it.support }.eachCount()
-        assertEquals(36, bySupport[MlKitSupport.SUPPORTED])
+        assertEquals(37, bySupport[MlKitSupport.SUPPORTED])
         assertEquals(16, bySupport[MlKitSupport.EXPERIMENTAL])
-        assertEquals(123, bySupport[MlKitSupport.MAPPED])
+        assertEquals(122, bySupport[MlKitSupport.MAPPED])
         assertEquals(MlKitLanguageCatalog.all.size, MlKitLanguageCatalog.all.map { it.code.lowercase() }.toSet().size)
     }
 

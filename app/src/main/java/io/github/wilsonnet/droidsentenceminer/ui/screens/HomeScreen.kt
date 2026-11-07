@@ -145,7 +145,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                 return@launch
             }
             val text = result.text.trim()
-            val matches = if (text.isBlank()) emptyList() else container.lookup.scan(text)
+            val matches = if (text.isBlank()) emptyList() else container.scanText(text)
             testImage = bitmap
             testText = text
             testMatches = matches
