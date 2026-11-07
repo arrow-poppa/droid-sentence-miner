@@ -7,26 +7,35 @@ import kotlin.math.min
 
 /**
  * Cleans up raw OCR line detections the way GSM/OwOCR does for visual novels:
- * furigana filtering, UI-noise filtering, line merging and Japanese text normalization.
+ * furigana filtering, UI-noise filtering, line merging and text normalization.
+ *
+ * The [TextProfile] decides what is "the text": [TextProfile.JAPANESE] (the default) keeps the
+ * original Japanese rules byte for byte; other profiles use script-based noise filtering, NFKC
+ * without the full-width punctuation mapping, no furigana filter, and space-joined rows for
+ * space-delimited scripts.
  */
 object OcrPostProcessor {
 
     data class MergedLine(val text: String, val box: BoundingBox)
 
-    fun merge(rawLines: List<OcrLine>, dropNoise: Boolean = true): List<MergedLine> {
+    fun merge(
+        rawLines: List<OcrLine>,
+        dropNoise: Boolean = true,
+        profile: TextProfile = TextProfile.JAPANESE,
+    ): List<MergedLine> {
         if (rawLines.isEmpty()) return emptyList()
 
         val normalized = rawLines
             .mapNotNull { line ->
-                val text = normalize(line.text)
+                val text = normalize(line.text, profile)
                 if (text.isBlank()) null else line.copy(text = text)
             }
         if (normalized.isEmpty()) return emptyList()
 
-        val furiganaFiltered = dropFurigana(normalized)
-        val hasJapanese = furiganaFiltered.any { japaneseRatio(it.text) >= 0.35 }
-        val noiseFiltered = if (hasJapanese && dropNoise) {
-            furiganaFiltered.filter { japaneseRatio(it.text) >= 0.20 || it.text.length <= 1 }
+        val furiganaFiltered = if (profile.isJapanese) dropFurigana(normalized) else normalized
+        val hasTarget = furiganaFiltered.any { profile.ratio(it.text) >= 0.35 }
+        val noiseFiltered = if (hasTarget && dropNoise) {
+            furiganaFiltered.filter { profile.ratio(it.text) >= 0.20 || it.text.length <= 1 }
         } else {
             furiganaFiltered
         }
@@ -45,7 +54,7 @@ object OcrPostProcessor {
 
         val merged = groups.map { group ->
             val ordered = group.sortedBy { it.box.left }
-            val text = joinJapanese(ordered.map { it.text })
+            val text = joinRow(ordered.map { it.text }, profile)
             val box = ordered.map { it.box }.reduce { acc, box -> acc.union(box) }
             MergedLine(text, box)
         }
@@ -55,7 +64,8 @@ object OcrPostProcessor {
         return merged.filter { seen.add(it.text) }
     }
 
-    fun toSentenceText(merged: List<MergedLine>): String {
+    fun toSentenceText(merged: List<MergedLine>, profile: TextProfile = TextProfile.JAPANESE): String {
+        if (!profile.isJapanese) return merged.joinToString("\n") { it.text }.trim()
         return merged.joinToString("\n") { OcrTextFixes.apply(it.text) }.trim()
     }
 
@@ -107,16 +117,20 @@ object OcrPostProcessor {
         return (overlap / minWidth).coerceIn(0f, 1f)
     }
 
-    private fun japaneseRatio(text: String): Float {
-        var significant = 0
-        var japanese = 0
-        for (ch in text) {
-            if (ch.isLetterOrDigit()) {
-                significant++
-                if (JapaneseTextScore.isJapanese(ch)) japanese++
+    private fun joinRow(parts: List<String>, profile: TextProfile): String {
+        if (profile.isJapanese) return joinJapanese(parts)
+        if (profile.spaceDelimited) return parts.joinToString(" ").trim()
+        // Chinese / Thai: glue, except between two non-target words (Latin names inside Chinese).
+        val sb = StringBuilder()
+        for (part in parts) {
+            if (sb.isNotEmpty()) {
+                val prev = sb.last()
+                val next = part.first()
+                if (prev.isLetterOrDigit() && !profile.isTarget(prev) && next.isLetterOrDigit() && !profile.isTarget(next)) sb.append(' ')
             }
+            sb.append(part)
         }
-        return if (significant == 0) 0f else japanese.toFloat() / significant
+        return sb.toString().trim()
     }
 
     private fun joinJapanese(parts: List<String>): String {
@@ -134,6 +148,16 @@ object OcrPostProcessor {
             sb.append(part)
         }
         return sb.toString().trim()
+    }
+
+    fun normalize(text: String, profile: TextProfile): String {
+        if (profile.isJapanese) return normalize(text)
+        // NFKC folds Arabic presentation forms, ligatures and full-width Latin; no punctuation mapping.
+        val t = Normalizer.normalize(text, Normalizer.Form.NFKC)
+            .replace('\u00A0', ' ')
+            .replace('\u3000', ' ')
+            .replace(Regex("[ \\t]+"), " ")
+        return if (profile.spaceDelimited) t.trim() else t.replace(Regex("(?<=[\\p{IsHan}]) (?=[\\p{IsHan}])"), "").trim()
     }
 
     fun normalize(text: String): String {

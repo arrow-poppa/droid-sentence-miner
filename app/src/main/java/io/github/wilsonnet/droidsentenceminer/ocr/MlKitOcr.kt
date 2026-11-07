@@ -6,7 +6,12 @@ import com.google.android.gms.tasks.Task
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
+import com.google.mlkit.vision.text.TextRecognizer
+import com.google.mlkit.vision.text.chinese.ChineseTextRecognizerOptions
+import com.google.mlkit.vision.text.devanagari.DevanagariTextRecognizerOptions
 import com.google.mlkit.vision.text.japanese.JapaneseTextRecognizerOptions
+import com.google.mlkit.vision.text.korean.KoreanTextRecognizerOptions
+import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
@@ -15,23 +20,64 @@ import kotlin.coroutines.resumeWithException
 import kotlin.system.measureTimeMillis
 
 /**
- * On-device Japanese OCR using ML Kit.
+ * The five script recognizers of ML Kit Text Recognition v2. Each one reads every language of its
+ * script ([MlKitLanguageCatalog]): there is no per-language model and no universal recognizer that
+ * picks a script by itself. [bundled] models ship in the APK (work offline and without Google Play);
+ * the others are downloaded by Google Play services on first use ([MlKitModules]).
+ */
+enum class MlKitScript(val id: String, val label: String, val bundled: Boolean) {
+    LATIN("latin", "Latin", bundled = true),
+    CHINESE("chinese", "Chinese", bundled = false),
+    JAPANESE("japanese", "Japanese", bundled = true),
+    KOREAN("korean", "Korean", bundled = false),
+    DEVANAGARI("devanagari", "Devanagari", bundled = false),
+    ;
+
+    fun newClient(): TextRecognizer = TextRecognition.getClient(
+        when (this) {
+            LATIN -> TextRecognizerOptions.DEFAULT_OPTIONS
+            CHINESE -> ChineseTextRecognizerOptions.Builder().build()
+            JAPANESE -> JapaneseTextRecognizerOptions.Builder().build()
+            KOREAN -> KoreanTextRecognizerOptions.Builder().build()
+            DEVANAGARI -> DevanagariTextRecognizerOptions.Builder().build()
+        },
+    )
+
+    companion object {
+        fun fromId(id: String?): MlKitScript? = entries.firstOrNull { it.id == id }
+
+        /** The recognizer for a study language: the catalog's script model, Latin when it has none. */
+        fun forLanguage(code: String): MlKitScript = MlKitLanguageCatalog.find(code)?.recognizer ?: when (TextProfile.forLanguage(code)) {
+            TextProfile.JAPANESE -> JAPANESE
+            TextProfile.CHINESE -> CHINESE
+            TextProfile.KOREAN -> KOREAN
+            TextProfile.DEVANAGARI -> DEVANAGARI
+            else -> LATIN
+        }
+    }
+}
+
+/**
+ * On-device OCR using one ML Kit script recognizer.
  *
  * Mirrors the two-pass strategy of GameSentenceMiner's OwOCR pipeline:
  *  1. Detect and recognize the whole capture region.
  *  2. Re-recognize each detected text block at higher resolution and keep
- *     whichever result reads better as Japanese.
+ *     whichever result reads better in the study language ([profile]).
  */
-class MlKitJapaneseOcr(
+open class MlKitOcr(
+    val script: MlKitScript,
     private val twoPass: Boolean = true,
     private val dropNoise: Boolean = true,
+    val profile: TextProfile = TextProfile.JAPANESE,
 ) : OcrEngine {
 
-    override val name: String = "ML Kit Japanese"
+    override val name: String = "ML Kit ${script.label}"
 
-    private val recognizer by lazy {
-        TextRecognition.getClient(JapaneseTextRecognizerOptions.Builder().build())
-    }
+    private val recognizer by lazy { script.newClient() }
+
+    /** The ML Kit client, for module availability checks (Google Play–delivered scripts). */
+    val client: TextRecognizer get() = recognizer
 
     override suspend fun recognize(bitmap: Bitmap): OcrResult = withContext(Dispatchers.Default) {
         var lines: List<OcrLine> = emptyList()
@@ -39,12 +85,12 @@ class MlKitJapaneseOcr(
             val prepared = ImagePreprocessor.upscaleForOcr(bitmap)
             lines = recognizeOnce(prepared)
 
-            val merged = OcrPostProcessor.merge(lines, dropNoise = dropNoise)
+            val merged = OcrPostProcessor.merge(lines, dropNoise = dropNoise, profile = profile)
             if (twoPass && merged.isNotEmpty()) {
                 lines = refine(prepared, merged)
             }
         }
-        val text = OcrPostProcessor.toSentenceText(OcrPostProcessor.merge(lines, dropNoise = dropNoise))
+        val text = OcrPostProcessor.toSentenceText(OcrPostProcessor.merge(lines, dropNoise = dropNoise, profile = profile), profile)
         OcrResult(text = text, lines = lines, elapsedMs = elapsed)
     }
 
@@ -85,8 +131,8 @@ class MlKitJapaneseOcr(
             val scaled = ImagePreprocessor.upscaleForOcr(crop, minWidth = crop.width * 2)
             val result = runCatching { recognizeOnce(scaled) }.getOrNull()
             if (result.isNullOrEmpty()) continue
-            val candidateText = OcrPostProcessor.merge(result, dropNoise = dropNoise).joinToString("\n") { it.text }
-            if (JapaneseTextScore.score(candidateText) > JapaneseTextScore.score(line.text) + SCORE_MARGIN) {
+            val candidateText = OcrPostProcessor.merge(result, dropNoise = dropNoise, profile = profile).joinToString("\n") { it.text }
+            if (profile.score(candidateText) > profile.score(line.text) + SCORE_MARGIN) {
                 refinedByKey[keyOf(line)] = candidateText
             }
         }
@@ -104,6 +150,12 @@ class MlKitJapaneseOcr(
         private const val SCORE_MARGIN = 1.5
     }
 }
+
+/** ML Kit Japanese: the original engine, still used directly by book mode. */
+class MlKitJapaneseOcr(
+    twoPass: Boolean = true,
+    dropNoise: Boolean = true,
+) : MlKitOcr(MlKitScript.JAPANESE, twoPass, dropNoise, TextProfile.JAPANESE)
 
 internal suspend fun <T> Task<T>.awaitResult(): T = suspendCancellableCoroutine { cont ->
     addOnSuccessListener { result -> if (cont.isActive) cont.resume(result) }

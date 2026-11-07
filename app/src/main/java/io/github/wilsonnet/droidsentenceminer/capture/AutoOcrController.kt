@@ -3,8 +3,9 @@ package io.github.wilsonnet.droidsentenceminer.capture
 import android.graphics.Bitmap
 import android.util.Log
 import io.github.wilsonnet.droidsentenceminer.core.DsmPrefs
-import io.github.wilsonnet.droidsentenceminer.ocr.JapaneseTextScore
-import io.github.wilsonnet.droidsentenceminer.ocr.MlKitJapaneseOcr
+import io.github.wilsonnet.droidsentenceminer.ocr.MlKitOcr
+import io.github.wilsonnet.droidsentenceminer.ocr.OcrUnavailableException
+import io.github.wilsonnet.droidsentenceminer.ocr.TextProfile
 import io.github.wilsonnet.droidsentenceminer.ocr.OcrEngine
 import io.github.wilsonnet.droidsentenceminer.ocr.OcrPostProcessor
 import io.github.wilsonnet.droidsentenceminer.ocr.SubtitleLineFilter
@@ -93,7 +94,14 @@ class AutoOcrController(
     private suspend fun loop() {
         val dropNoise = prefs.ocrDropNoise.first()
         // meikiocr is accurate in one pass; ML Kit gets a fast pass here and a two-pass re-read below.
-        val fast = container.ocrEngine(twoPass = false, dropNoise = dropNoise)
+        val profile = container.textProfile()
+        // An engine that can't run (model not downloaded) stops auto OCR with the reason, not silently.
+        val fast = try {
+            container.ocrEngine(twoPass = false, dropNoise = dropNoise)
+        } catch (e: OcrUnavailableException) {
+            _status.value = _status.value.copy(error = e.message)
+            return
+        }
         val tracker = TextLineTracker()
         var lastSignature: IntArray? = null
         var lastRead = ""
@@ -153,16 +161,16 @@ class AutoOcrController(
                     lastCrops = crops
                     val ocrStart = System.currentTimeMillis()
                     val reads = crops.mapIndexed { i, crop ->
-                        runCatching { dialogueRead(fast, crop, dropNoise, selected[i], i) }.getOrElse { "" to emptyList() }
+                        runCatching { dialogueRead(fast, crop, dropNoise, selected[i], i, profile) }.getOrElse { "" to emptyList() }
                     }
                     _status.value = _status.value.copy(
                         ocrRuns = _status.value.ocrRuns + 1,
                         ocrMs = _status.value.ocrMs + System.currentTimeMillis() - ocrStart,
                     )
                     val raw = reads.joinToString("\n") { it.first }.trim()
-                    val japanese = looksJapanese(raw)
-                    _screenText.value = if (japanese) reads.flatMap { it.second } else emptyList()
-                    if (japanese) raw else ""
+                    val isText = profile.looksLikeText(raw)
+                    _screenText.value = if (isText) reads.flatMap { it.second } else emptyList()
+                    if (isText) raw else ""
                 }
                 _status.value = _status.value.copy(reads = _status.value.reads + 1, lastRead = text, lastReadMs = atMs, error = null)
             }
@@ -172,7 +180,7 @@ class AutoOcrController(
                 when (event) {
                     is TextLineTracker.Event.Ended -> closeOpenLine(event.atMs)
                     is TextLineTracker.Event.Started -> {
-                        val refined = refine(lastCrops, event.text)
+                        val refined = refine(lastCrops, event.text, profile)
                         val screenshot = capture.latestScreenshot()
                         openLineId = textLog.startLine(refined, event.atMs, TextLineEntity.SOURCE_AUTO, screenshot)
                         // The slower pass counts as one more vote in the line's consensus.
@@ -182,7 +190,7 @@ class AutoOcrController(
                     }
                     is TextLineTracker.Event.Settled -> openLineId?.let { id -> textLog.updateText(id, event.text) }
                     is TextLineTracker.Event.Updated -> openLineId?.let { id ->
-                        textLog.updateText(id, refine(lastCrops, event.text))
+                        textLog.updateText(id, refine(lastCrops, event.text, profile))
                     }
                 }
             }
@@ -193,23 +201,24 @@ class AutoOcrController(
     }
 
     /** Re-reads a stable line with the user's OCR settings; keeps the fast read if worse. Stored joined. */
-    private suspend fun refine(crops: List<Bitmap>, fastText: String): String {
+    private suspend fun refine(crops: List<Bitmap>, fastText: String, profile: TextProfile): String {
         val fast = TextSimilarity.clean(fastText)
         if (!prefs.ocrTwoPass.first() || crops.isEmpty()) return fast
         val dropNoise = prefs.ocrDropNoise.first()
-        val engine = container.ocrEngine(twoPass = true, dropNoise = dropNoise)
-        if (engine !is MlKitJapaneseOcr) return fast
+        // Only ML Kit has a second, slower pass; meikiocr and PaddleOCR read once.
+        val engine = runCatching { container.ocrEngine(twoPass = true, dropNoise = dropNoise) }.getOrNull()
+        if (engine !is MlKitOcr) return fast
         val text = runCatching {
-            TextSimilarity.clean(crops.map { dialogueText(engine, it, dropNoise) }.joinToString("\n"))
+            TextSimilarity.clean(crops.map { dialogueText(engine, it, dropNoise, profile) }.joinToString("\n"))
         }.getOrElse { return fast }
         if (text.isBlank()) return fast
-        return if (JapaneseTextScore.score(text) >= JapaneseTextScore.score(fast)) text else fast
+        return if (profile.score(text) >= profile.score(fast)) text else fast
     }
 
-    private suspend fun dialogueText(engine: OcrEngine, crop: Bitmap, dropNoise: Boolean): String {
+    private suspend fun dialogueText(engine: OcrEngine, crop: Bitmap, dropNoise: Boolean, profile: TextProfile): String {
         val result = engine.recognize(crop)
-        val rows = SubtitleLineFilter.filter(OcrPostProcessor.merge(result.lines, dropNoise = dropNoise))
-        return OcrPostProcessor.toSentenceText(rows).trim()
+        val rows = SubtitleLineFilter.filter(OcrPostProcessor.merge(result.lines, dropNoise = dropNoise, profile = profile), profile)
+        return OcrPostProcessor.toSentenceText(rows, profile).trim()
     }
 
     /** [dialogueText] plus the same read laid out on screen for the screen dictionary. */
@@ -219,12 +228,13 @@ class AutoOcrController(
         dropNoise: Boolean,
         area: TextArea,
         areaIndex: Int,
+        profile: TextProfile,
     ): Pair<String, List<ScreenTextLine>> {
         val result = engine.recognize(crop)
         val lines = SubtitleLineFilter.dropUnsure(result.lines)
-        val rows = SubtitleLineFilter.filter(OcrPostProcessor.merge(lines, dropNoise = dropNoise))
-        val layer = ScreenText.fromRead(lines, rows.map { it.box }, crop.width, crop.height, area, areaIndex)
-        return OcrPostProcessor.toSentenceText(rows).trim() to layer
+        val rows = SubtitleLineFilter.filter(OcrPostProcessor.merge(lines, dropNoise = dropNoise, profile = profile), profile)
+        val layer = ScreenText.fromRead(lines, rows.map { it.box }, crop.width, crop.height, area, areaIndex, profile)
+        return OcrPostProcessor.toSentenceText(rows, profile).trim() to layer
     }
 
     /**
@@ -236,10 +246,11 @@ class AutoOcrController(
         if (selected.isEmpty()) return@withContext null
         val frame = capture.grabFrame(timeoutMs = 400, maxAgeMs = 400) ?: return@withContext null
         val dropNoise = prefs.ocrDropNoise.first()
-        val engine = container.ocrEngine(twoPass = false, dropNoise = dropNoise)
+        val engine = runCatching { container.ocrEngine(twoPass = false, dropNoise = dropNoise) }.getOrElse { return@withContext null }
+        val profile = container.textProfile()
         selected.flatMapIndexed { i, a ->
             val crop = capture.cropToRegion(frame, ScreenCaptureManager.RectFrac(a.left, a.top, a.right, a.bottom))
-            runCatching { dialogueRead(engine, crop, dropNoise, a, i).second }.getOrElse { emptyList() }
+            runCatching { dialogueRead(engine, crop, dropNoise, a, i, profile).second }.getOrElse { emptyList() }
         }
     }
 
@@ -247,11 +258,6 @@ class AutoOcrController(
         val id = openLineId ?: return
         openLineId = null
         textLog.endLine(id, atMs)
-    }
-
-    private fun looksJapanese(text: String): Boolean {
-        val japanese = text.count { JapaneseTextScore.isJapanese(it) }
-        return japanese >= 2 && JapaneseTextScore.score(text) >= 3.0
     }
 
     companion object {

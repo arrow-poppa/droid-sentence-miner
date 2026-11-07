@@ -132,6 +132,8 @@ fun SettingsScreen(modifier: Modifier = Modifier, onOpen: (String) -> Unit = {})
             "Backend, deck, note type and fields" + if (ankiDeck.isNotBlank()) " · deck: $ankiDeck" else "",
         ) { onOpen(io.github.wilsonnet.droidsentenceminer.PAGE_ANKI) }
 
+        StudyLanguageCard(container)
+
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("OCR", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
@@ -144,9 +146,9 @@ fun SettingsScreen(modifier: Modifier = Modifier, onOpen: (String) -> Unit = {})
                         onClick = { scope.launch { container.prefs.setOcrEngine(meiki) } },
                     )
                     Column(Modifier.weight(1f)) {
-                        Text("meikiocr (recommended)", style = MaterialTheme.typography.bodyMedium)
+                        Text("meikiocr (recommended for Japanese)", style = MaterialTheme.typography.bodyMedium)
                         Text(
-                            "Trained on Japanese games: much more accurate on stylized and outlined text. " +
+                            "Japanese only. Trained on Japanese games: much more accurate on stylized and outlined text. " +
                                 if (meikiInstalled) "Installed." else "Needs a one-time 31 MB download.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -161,12 +163,14 @@ fun SettingsScreen(modifier: Modifier = Modifier, onOpen: (String) -> Unit = {})
                     Column(Modifier.weight(1f)) {
                         Text("Google ML Kit", style = MaterialTheme.typography.bodyMedium)
                         Text(
-                            "Built in, no download. Weaker on game fonts (small kana, dakuten).",
+                            "Latin, Chinese, Japanese, Korean and Devanagari recognizers. Latin and Japanese are built in; " +
+                                "the others come from Google Play services. Weaker on Japanese game fonts (small kana, dakuten).",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
+                OcrModelOptions(container, engine)
                 if (engine == meiki && !meikiInstalled) {
                     val progress = meikiProgress
                     if (progress != null) {
@@ -202,8 +206,8 @@ fun SettingsScreen(modifier: Modifier = Modifier, onOpen: (String) -> Unit = {})
                     scope.launch { container.prefs.setOcrTwoPass(value) }
                 }
                 SettingSwitch(
-                    title = "Filter non-Japanese lines",
-                    description = "Drop UI noise such as menus or numbers when Japanese text is present.",
+                    title = "Filter lines not in the study language",
+                    description = "Drop UI noise such as menus or numbers when text in the study language is present.",
                     checked = dropNoise,
                 ) { value ->
                     dropNoise = value
@@ -418,7 +422,9 @@ fun SettingsScreen(modifier: Modifier = Modifier, onOpen: (String) -> Unit = {})
                         "• Yomitan by yomidevs — dictionary format, deinflection rules, popup UX\n" +
                         "• Yomihon by the Yomihon project — Kotlin dictionary parser and Japanese deinflector reference (GPL-3.0)\n" +
                         "• Jiten by Sirush — deinflection rule source\n" +
-                        "• ML Kit by Google — on-device Japanese OCR\n" +
+                        "• ML Kit by Google — on-device OCR (Latin, Chinese, Japanese, Korean, Devanagari)\n" +
+                        "• PaddleOCR by PaddlePaddle — PP-OCRv6/v5 ONNX models, downloaded on demand (Apache-2.0)\n" +
+                        "• Chimahon and Fushi by arrow-poppa — multilingual OCR model pins and lookup rules (GPL-3.0)\n" +
                         "• AnkiDroid — AnkiDroid API and FlashCards contract\n" +
                         "• meikiocr by rtr46 — game-trained OCR models (LGPL-3.0), downloaded at runtime\n" +
                         "• meikidroid by rtr46 — Android game OCR overlay reference\n" +

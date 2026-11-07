@@ -2,8 +2,9 @@ package io.github.wilsonnet.droidsentenceminer.capture
 
 import io.github.wilsonnet.droidsentenceminer.book.PageLayout
 import io.github.wilsonnet.droidsentenceminer.ocr.BoundingBox
-import io.github.wilsonnet.droidsentenceminer.ocr.JapaneseTextScore
+import io.github.wilsonnet.droidsentenceminer.ocr.OcrPostProcessor
 import io.github.wilsonnet.droidsentenceminer.ocr.OcrLine
+import io.github.wilsonnet.droidsentenceminer.ocr.TextProfile
 
 /** A box as fractions of the screen. */
 data class FracRect(val left: Float, val top: Float, val right: Float, val bottom: Float) {
@@ -34,6 +35,8 @@ object ScreenText {
     /**
      * [raw] are the engine's lines for a crop of [area] ([cropWidth]×[cropHeight] px); [kept] are
      * the rows the subtitle filter kept (crop px), so background signage gets no layer either.
+     * Lines with no letter of the study language ([profile]) get no layer: with the default
+     * Japanese profile that is the original "no Japanese character" rule.
      */
     fun fromRead(
         raw: List<OcrLine>,
@@ -42,6 +45,7 @@ object ScreenText {
         cropHeight: Int,
         area: TextArea,
         areaIndex: Int,
+        profile: TextProfile = TextProfile.JAPANESE,
     ): List<ScreenTextLine> {
         if (cropWidth <= 0 || cropHeight <= 0) return emptyList()
         fun frac(b: BoundingBox) = FracRect(
@@ -61,10 +65,13 @@ object ScreenText {
                 line.box.centerX >= k.left && line.box.centerX <= k.right && line.box.centerY >= k.top && line.box.centerY <= k.bottom
             }
             if (!inKept) return@mapNotNull null
-            val text = PageLayout.clean(line.text)
-            if (text.none { JapaneseTextScore.isJapanese(it) }) return@mapNotNull null
-            val vertical = line.box.height > line.box.width * 1.3f && text.length >= 2
-            ScreenTextLine(text, PageLayout.glyphsOf(line, text, vertical).map(::frac), areaIndex, line.confidence ?: 1f)
+            val text = if (profile.isJapanese) PageLayout.clean(line.text) else OcrPostProcessor.normalize(line.text, profile)
+            if (text.isEmpty() || text.none(profile::isTarget)) return@mapNotNull null
+            val vertical = profile.allowsVertical && line.box.height > line.box.width * 1.3f && text.length >= 2
+            var glyphs = PageLayout.glyphsOf(line, text, vertical)
+            // Evenly split boxes run left to right; an RTL line's first (logical) character is drawn rightmost.
+            if (profile.rightToLeft && line.chars?.size != text.length) glyphs = glyphs.reversed()
+            ScreenTextLine(text, glyphs.map(::frac), areaIndex, line.confidence ?: 1f)
         }.sortedWith(compareBy({ it.area }, { it.bounds.top }, { it.bounds.left }))
     }
 

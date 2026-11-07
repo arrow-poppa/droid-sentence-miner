@@ -13,8 +13,9 @@ import io.github.wilsonnet.droidsentenceminer.dict.DictDatabase
 import io.github.wilsonnet.droidsentenceminer.dict.DictDownloader
 import io.github.wilsonnet.droidsentenceminer.dict.TermLookup
 import io.github.wilsonnet.droidsentenceminer.dict.YomitanImporter
-import io.github.wilsonnet.droidsentenceminer.ocr.MlKitJapaneseOcr
 import io.github.wilsonnet.droidsentenceminer.ocr.OcrEngine
+import io.github.wilsonnet.droidsentenceminer.ocr.OcrEngineRegistry
+import io.github.wilsonnet.droidsentenceminer.ocr.TextProfile
 import io.github.wilsonnet.droidsentenceminer.textlog.TextLog
 import io.github.wilsonnet.droidsentenceminer.textlog.TextLogDatabase
 import kotlinx.coroutines.CoroutineScope
@@ -80,22 +81,19 @@ class AppContainer(private val context: Context) {
         return updates
     }
 
-    private val mlKitEngines = java.util.concurrent.ConcurrentHashMap<Pair<Boolean, Boolean>, MlKitJapaneseOcr>()
+    val ocrEngines: OcrEngineRegistry by lazy { OcrEngineRegistry(context, prefs) }
 
     /**
-     * The OCR engine the user picked: meikiocr when selected and downloaded, ML Kit otherwise.
-     * [twoPass]/[dropNoise] only apply to ML Kit.
+     * The OCR engine for the current settings (engine + script/model + study language, see
+     * [OcrEngineRegistry.resolve]). [twoPass]/[dropNoise] only apply to ML Kit. Throws
+     * [io.github.wilsonnet.droidsentenceminer.ocr.OcrUnavailableException] when the picked model
+     * isn't downloaded yet.
      */
-    suspend fun ocrEngine(twoPass: Boolean, dropNoise: Boolean = true, preferred: String? = null): OcrEngine {
-        val choice = preferred ?: prefs.ocrEngine.first()
-        if (choice == DsmPrefs.ENGINE_MEIKI) {
-            io.github.wilsonnet.droidsentenceminer.ocr.MeikiModels.installVariants(context)
-            io.github.wilsonnet.droidsentenceminer.ocr.MeikiOcr.load(
-                io.github.wilsonnet.droidsentenceminer.ocr.MeikiModels.dir(context),
-            )?.let { return it }
-        }
-        return mlKitEngines.getOrPut(twoPass to dropNoise) { MlKitJapaneseOcr(twoPass = twoPass, dropNoise = dropNoise) }
-    }
+    suspend fun ocrEngine(twoPass: Boolean, dropNoise: Boolean = true, preferred: String? = null): OcrEngine =
+        ocrEngines.engine(twoPass, dropNoise, preferred)
+
+    /** What counts as study-language text for OCR filtering and the screen layer. */
+    suspend fun textProfile(): TextProfile = ocrEngines.profile()
 
     companion object {
         fun from(context: Context): AppContainer =

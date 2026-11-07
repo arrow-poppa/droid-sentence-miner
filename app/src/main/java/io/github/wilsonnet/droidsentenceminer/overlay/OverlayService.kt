@@ -41,8 +41,6 @@ import io.github.wilsonnet.droidsentenceminer.capture.ScreenText
 import io.github.wilsonnet.droidsentenceminer.capture.ScreenshotAccessibilityService
 import io.github.wilsonnet.droidsentenceminer.ocr.SubtitleLineFilter
 import io.github.wilsonnet.droidsentenceminer.capture.ScreenCaptureManager
-import io.github.wilsonnet.droidsentenceminer.ocr.JapaneseTextScore
-import io.github.wilsonnet.droidsentenceminer.ocr.MlKitJapaneseOcr
 import io.github.wilsonnet.droidsentenceminer.textlog.TextLineEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -466,18 +464,22 @@ class OverlayService : Service() {
         val padX = QUICK_PAD_DP * resources.displayMetrics.density / frame.width
         val padY = QUICK_PAD_DP * resources.displayMetrics.density / frame.height
         val area = TextArea(box.left - padX, box.top - padY, box.right + padX, box.bottom + padY).clamped()
+        var unavailable: String? = null
         val lines = withContext(Dispatchers.Default) {
             val crop = captureManager.cropToRegion(frame, ScreenCaptureManager.RectFrac(area.left, area.top, area.right, area.bottom))
             val dropNoise = container.prefs.ocrDropNoise.first()
-            val result = runCatching { container.ocrEngine(twoPass = false, dropNoise = dropNoise).recognize(padForOcr(crop)) }.getOrNull()
+            val profile = container.textProfile()
+            val result = runCatching { container.ocrEngine(twoPass = false, dropNoise = dropNoise).recognize(padForOcr(crop)) }
+                .onFailure { if (it is io.github.wilsonnet.droidsentenceminer.ocr.OcrUnavailableException) unavailable = it.message }
+                .getOrNull()
                 ?: return@withContext emptyList()
             // Padding sits right/below the crop, so boxes are still crop px; drop reads in the padding.
             val read = SubtitleLineFilter.dropUnsure(result.lines)
                 .filter { it.box.centerX < crop.width && it.box.centerY < crop.height }
-            ScreenText.fromRead(read, read.map { it.box }, crop.width, crop.height, area, 0)
+            ScreenText.fromRead(read, read.map { it.box }, crop.width, crop.height, area, 0, profile)
         }
         if (lines.isEmpty()) {
-            toast("No Japanese text in the box")
+            toast(unavailable ?: "No text in the box")
             return 0
         }
         screenDictionary.showQuick(lines)
@@ -969,9 +971,9 @@ class OverlayService : Service() {
         }
 
         val text = result.text.trim()
-        if (text.isBlank() || JapaneseTextScore.score(text) < 1.0) {
+        if (text.isBlank() || container.textProfile().score(text) < 1.0) {
             panelState.scanning = false
-            val status = "No Japanese text found (${result.elapsedMs} ms)"
+            val status = "No text found (${result.elapsedMs} ms)"
             panelState.status = status
             return ScanOutcome(text, result.elapsedMs, 0, status)
         }
