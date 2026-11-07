@@ -2,4 +2,8 @@
 <full-backup-content>
     <include domain="sharedpref" path="." />
     <exclude domain="sharedpref" path="anki_secrets.preferences_pb" />
+    <!-- BYOK AI: encrypted API keys (AiSettingsStore). The Keystore key never leaves the device, so
+         a restored copy could not be decrypted anyway; keep it out of backups explicitly. -->
+    <exclude domain="file" path="datastore/ai_secrets.preferences_pb" />
+    <exclude domain="file" path="datastore/ai_settings.preferences_pb" />
 </full-backup-content>
