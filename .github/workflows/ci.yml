@@ -1,0 +1,74 @@
+name: CI
+
+# Unit tests + debug APK on every push and pull request. Builds never run on the dev box
+# (not enough RAM for Gradle + Kotlin daemons) — this workflow is the build/test authority.
+on:
+  push:
+    branches: ['**']
+    paths-ignore:
+      - 'site/**'
+      - '**.md'
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-java@v6
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: gradle/actions/setup-gradle@v5  # v6 adds proprietary caching terms
+
+      - name: Unit tests + debug APK
+        run: ./gradlew testDebugUnitTest assembleDebug --console=plain --continue
+
+      - name: Test summary
+        if: always()
+        run: |
+          python3 - <<'EOF' >> "$GITHUB_STEP_SUMMARY"
+          import glob, re
+          t = s = f = 0
+          failed = []
+          for p in glob.glob('app/build/test-results/testDebugUnitTest/*.xml'):
+              body = open(p, encoding='utf-8').read()
+              m = re.search(r'tests="(\d+)" skipped="(\d+)" failures="(\d+)" errors="(\d+)"', body)
+              if not m:
+                  continue
+              t += int(m[1]); s += int(m[2]); f += int(m[3]) + int(m[4])
+              for case in re.finditer(r'<testcase name="([^"]+)" classname="([^"]+)"[^>]*>\s*<(failure|error)', body):
+                  failed.append(f'{case[2]}.{case[1]}')
+          print(f'### Unit tests: {t} run, {s} skipped, {f} failed')
+          for name in failed:
+              print(f'- ❌ `{name}`')
+          EOF
+
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-reports
+          path: |
+            app/build/reports/tests/testDebugUnitTest/
+            app/build/test-results/testDebugUnitTest/
+          if-no-files-found: ignore
+          retention-days: 7
+
+      - name: Upload debug APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-debug
+          path: app/build/outputs/apk/debug/app-debug.apk
+          retention-days: 7
