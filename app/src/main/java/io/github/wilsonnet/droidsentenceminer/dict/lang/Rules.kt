@@ -175,7 +175,9 @@ object ConditionHierarchy {
         "n" to setOf("np", "ns"),
         "np" to setOf("n"),
         "ns" to setOf("n"),
-        "v" to setOf("v_phr"),
+        "v" to setOf("v_phr", "vw", "vs"),
+        "vw" to setOf("v"),
+        "vs" to setOf("v"),
         "v_phr" to setOf("v"),
     )
 

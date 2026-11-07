@@ -119,8 +119,17 @@ internal class AiTransport(client: OkHttpClient, timeouts: AiTimeouts) {
         val text = if (asStream) {
             readStream(body.source(), provider, redactor, onPartial)
         } else {
-            readWhole(body.source().readByteString().utf8(), provider, redactor).also { if (it.isNotEmpty()) onPartial(it) }
+            readWhole(body.source().let { source ->
+                val out = okio.Buffer()
+                while (out.size <= MAX_RESPONSE_BYTES) {
+                    val n = source.read(out, minOf(8192L, MAX_RESPONSE_BYTES + 1 - out.size))
+                    if (n < 0) break
+                }
+                if (out.size > MAX_RESPONSE_BYTES) throw oversizedResponse()
+                out.readUtf8()
+            }, provider, redactor).also { if (it.isNotEmpty()) onPartial(it) }
         }
+        if (text.length > MAX_EXPLANATION_CHARS) throw oversizedResponse()
         val trimmed = text.trim()
         if (trimmed.isEmpty()) throw AiException(AiErrorKind.EMPTY, "The AI service returned an empty explanation.", retryable = true)
         return trimmed
@@ -159,6 +168,7 @@ internal class AiTransport(client: OkHttpClient, timeouts: AiTimeouts) {
             }
             val delta = if (provider == AiProviderType.GEMINI) AiResponses.geminiText(payload) else AiResponses.openAiDelta(payload)
             if (delta.isNotEmpty()) {
+                if (full.length + delta.length > MAX_EXPLANATION_CHARS) throw oversizedResponse()
                 full.append(delta)
                 onPartial(full.toString())
             }
@@ -210,6 +220,7 @@ internal class AiTransport(client: OkHttpClient, timeouts: AiTimeouts) {
             )
             code == 429 -> AiException(AiErrorKind.RATE_LIMITED, "Rate limit or quota reached (HTTP 429). Try again later.", retryable = true)
             code == 408 -> AiException(AiErrorKind.TIMEOUT, "The AI service timed out (HTTP 408). Try again.", retryable = true)
+            code == 501 -> AiException(AiErrorKind.SERVER, "The endpoint does not implement streaming (HTTP 501).", retryable = true, streamRejected = true)
             code in 500..599 -> AiException(AiErrorKind.SERVER, "The AI service is temporarily unavailable (HTTP $code). Try again later.", retryable = true)
             code in 300..399 -> AiException(
                 AiErrorKind.INVALID_SETTINGS,
@@ -226,13 +237,17 @@ internal class AiTransport(client: OkHttpClient, timeouts: AiTimeouts) {
                     AiErrorKind.REJECTED,
                     "The AI service rejected the request (HTTP $code)${if (detail.isNotEmpty()) ": $detail" else ""}.",
                     retryable = false,
-                    streamRejected = code in STREAM_REJECT_CODES,
+                    streamRejected = code in STREAM_REJECT_CODES && (code != 400 && code != 422 || detail.contains("stream", ignoreCase = true)),
                 )
             }
         }
     }
 
+    private fun oversizedResponse() = AiException(AiErrorKind.OTHER, "The AI response exceeded the size limit.", retryable = false)
+
     private companion object {
+        const val MAX_RESPONSE_BYTES = 1024L * 1024
+        const val MAX_EXPLANATION_CHARS = 128 * 1024
         val JSON_MEDIA = "application/json; charset=utf-8".toMediaType()
         val STREAM_REJECT_CODES = setOf(400, 405, 415, 422, 501)
     }

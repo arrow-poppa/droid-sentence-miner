@@ -272,6 +272,8 @@ private fun PagePhoto(page: BookPage, selected: Int, onSelect: (Int) -> Unit) {
 private fun BlockCard(page: BookPage, index: Int, onPrev: () -> Unit, onNext: () -> Unit) {
     val context = LocalContext.current
     val container = remember { AppContainer.from(context) }
+    val scope = rememberCoroutineScope()
+    val language by container.prefs.studyLanguage.collectAsState(initial = "ja")
     val block = page.blocks[index]
     var words by remember(block) { mutableStateOf<List<ScannedWord>>(emptyList()) }
     // The looked-up range: a dictionary word on tap, or the user's own long-press selection.
@@ -281,7 +283,7 @@ private fun BlockCard(page: BookPage, index: Int, onPrev: () -> Unit, onNext: ()
     var textOrigin by remember { mutableStateOf(Offset.Zero) }
     val haptics = LocalHapticFeedback.current
 
-    LaunchedEffect(block) { words = container.scanText(block.text) }
+    LaunchedEffect(block, language) { words = container.scanText(block.text) }
 
     val highlight = MaterialTheme.colorScheme.primaryContainer
     val selecting = MaterialTheme.colorScheme.tertiaryContainer
@@ -344,7 +346,7 @@ private fun BlockCard(page: BookPage, index: Int, onPrev: () -> Unit, onNext: ()
                             when (outcome) {
                                 1 -> {
                                     val at = charAt(down.position)
-                                    picked = at?.let { a -> words.firstOrNull { a >= it.start && a < it.end } }?.let { it.start until it.end }
+                                    if (at != null) scope.launch { picked = container.wordRange(block.text, at) }
                                 }
                                 0 -> {
                                     val anchor = charAt(down.position) ?: return@awaitEachGesture

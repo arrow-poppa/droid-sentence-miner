@@ -16,9 +16,13 @@ class SseParser(private val onEvent: (String) -> Unit) {
     private val line = ByteArrayOutputStream()
     private val data = ArrayList<String>()
     private var lastWasCr = false
+    private var eventBytes = 0
 
     fun feed(bytes: ByteArray, offset: Int = 0, length: Int = bytes.size - offset) {
         for (i in offset until offset + length) {
+            if (++eventBytes > MAX_EVENT_BYTES) {
+                throw AiException(AiErrorKind.OTHER, "The AI service returned an oversized stream event.", retryable = false)
+            }
             val b = bytes[i]
             when (b) {
                 '\n'.code.toByte() -> {
@@ -60,9 +64,14 @@ class SseParser(private val onEvent: (String) -> Unit) {
     }
 
     private fun dispatch() {
+        eventBytes = 0
         if (data.isEmpty()) return
         val payload = data.joinToString("\n")
         data.clear()
         onEvent(payload)
+    }
+
+    companion object {
+        const val MAX_EVENT_BYTES = 1024 * 1024
     }
 }

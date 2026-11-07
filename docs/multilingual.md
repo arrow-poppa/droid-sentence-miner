@@ -70,7 +70,9 @@ fake local dictionary entry. No screenshot is sent and AI text is not exported t
 Keys use Android Keystore AES-GCM and an excluded secrets DataStore. HTTPS is required except
 explicitly acknowledged LAN/loopback HTTP. Certificate verification stays enabled; redirects
 are blocked. A bounded response cache distinguishes context, language and effective generation
-settings. Closing/switching a lookup cancels collection and abandons obsolete responses.
+settings. JSON and SSE events are capped at 1 MiB; completed explanations at 128 Ki UTF-16 units.
+ML Kit wrappers share one client per script, and switching away from ONNX engines unloads their sessions. Closing/switching a lookup cancels collection and abandons obsolete responses.
+Response/event size limits bound memory use; backend errors do not expose echoed authorization headers.
 
 ## Reproduce and remaining validation
 
@@ -81,3 +83,18 @@ No Android accuracy, latency, memory or CPU measurements are claimed here.
 
 The reference branches and pinned commits are recorded in integration-state.md. Ported files
 retain attribution; no proprietary secondary-engine weights or structured AI Word Cards ship.
+
+## Secondary-engine assessment
+
+These are absent from the functional picker, not claimed integrations:
+
+| Candidate | Evidence and remaining work |
+|---|---|
+| OneOCR ONNX | [one-ocr](https://github.com/pasitgut/one-ocr) exposes extracted Windows OneOCR models to ONNX Runtime. A cross-platform loader does not establish redistribution rights for Microsoft's weights; no verified Android artifact/license set was identified. |
+| IndraOCR | The [publisher's model card](https://huggingface.co/datalab-to/indra-ocr) specifies ONNX/Python inference tested on desktop Linux/macOS. Weights use a [modified OpenRAIL-M license](https://huggingface.co/datalab-to/indra-ocr/blob/d7c839c892bfe4b8993373db64c62f154d05d70b/LICENSE), separately from Apache code. It is a future port requiring Android graph/preprocessing validation and explicit model-license handling, not proven incompatible. |
+| ScreenAI / local Lens | Chimahon's pinned `LensEngine.kt` loads `liblens_ondevice_engine_base.so` and `liblens_ondevice_engine_play_ml.so`, only for ARM ABIs. Its loader license does not establish rights for Google's native binaries/assets. No verified distributable SDK/model bundle is integrated. |
+| Online Lens/Bing | No documented permitted API integration has been implemented; no reverse-engineered image-upload endpoint is used. |
+| NCNN FP16 | Chimahon's conversion/native track exists, but DSM has no CI-built and Android-validated NCNN artifact set for all target ABIs. Keep ONNX as the current implementation. |
+
+No secondary weights were downloaded or bundled during this continuation. This assessment does
+not claim benchmark results or a legal determination about using any particular artifact.

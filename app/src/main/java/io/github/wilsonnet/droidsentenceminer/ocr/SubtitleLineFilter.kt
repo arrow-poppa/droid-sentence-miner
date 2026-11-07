@@ -15,14 +15,15 @@ object SubtitleLineFilter {
         profile: TextProfile = TextProfile.JAPANESE,
     ): List<OcrPostProcessor.MergedLine> {
         if (lines.size <= 1) return lines
-        val dialogue = lines.filter { profile.count(it.text) >= MIN_TARGET }
+        val minTarget = if (profile.isJapanese) MIN_TARGET else 1
+        val dialogue = lines.filter { profile.count(it.text) >= minTarget }
         if (dialogue.isEmpty()) return lines
         // The row with the most study-language text anchors the expected glyph height.
         val anchor = dialogue.maxBy { profile.count(it.text) }.box.height.toFloat()
         if (anchor <= 0f) return lines
         return lines.filter { line ->
             val ratio = line.box.height / anchor
-            profile.count(line.text) >= MIN_TARGET && ratio in MIN_HEIGHT_RATIO..MAX_HEIGHT_RATIO
+            profile.count(line.text) >= minTarget && ratio in MIN_HEIGHT_RATIO..MAX_HEIGHT_RATIO
         }
     }
 

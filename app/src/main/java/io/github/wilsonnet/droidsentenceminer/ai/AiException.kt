@@ -13,7 +13,7 @@ class AiException(
 
 /** Scrubs anything key-shaped out of text that came from a server or an exception. */
 class Redactor(vararg secrets: String) {
-    private val literals = secrets.map { it.trim() }.filter { it.length >= 4 }
+    private val literals = secrets.map { it.trim() }.filter { it.isNotEmpty() }
 
     fun redact(text: String, maxLength: Int = 240): String {
         var out = text
@@ -25,7 +25,8 @@ class Redactor(vararg secrets: String) {
 
     private companion object {
         val PATTERNS = listOf(
-            Regex("(?i)bearer\\s+[A-Za-z0-9._~+/=-]+"),
+            Regex("(?i)authorization\\s*:\\s*(?:bearer\\s+)?[^\\r\\n,;]+"),
+            Regex("(?i)bearer\\s+[^\\s,;]+"),
             Regex("sk-[A-Za-z0-9_-]{8,}"),
             Regex("AIza[0-9A-Za-z_-]{20,}"),
         )

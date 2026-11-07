@@ -65,4 +65,11 @@ class TextProfileTest {
         org.junit.Assert.assertFalse(TextProfile.JAPANESE.looksLikeText("猫"))
     }
 
+    @Test
+    fun supplementaryHanUsesCodePointsInsteadOfSurrogateHalves() {
+        assertEquals(1, TextProfile.CHINESE.count("𠮷"))
+        assertEquals(1f, TextProfile.CHINESE.ratio("𠮷"))
+        org.junit.Assert.assertTrue(TextProfile.CHINESE.looksLikeText("𠮷"))
+    }
+
 }

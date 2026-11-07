@@ -55,34 +55,37 @@ class PaddleOcr private constructor(
     private fun run(bitmap: Bitmap): List<OcrLine> {
         check(!closed) { "PaddleOCR engine was closed" }
         val source = if (bitmap.config == Bitmap.Config.ARGB_8888) bitmap else bitmap.copy(Bitmap.Config.ARGB_8888, false)
-        val detStart = System.currentTimeMillis()
-        val (dw, dh) = PaddleDecoder.detInputSize(source.width, source.height, options.limitSide)
-        val detScaled = Bitmap.createScaledBitmap(source, dw, dh, true)
-        val detPixels = IntArray(dw * dh).also { detScaled.getPixels(it, 0, dw, 0, 0, dw, dh) }
-        if (detScaled !== source) detScaled.recycle()
-        val prob = OnnxTensor.createTensor(env, FloatBuffer.wrap(PaddleDecoder.detTensor(detPixels, dw, dh)), longArrayOf(1, 3, dh.toLong(), dw.toLong())).use { input ->
-            detector.run(mapOf(detector.inputNames.first() to input)).use { out ->
-                val tensor = out.get(0) as OnnxTensor
-                val buffer = tensor.floatBuffer
-                FloatArray(buffer.remaining()).also { buffer.get(it) }
+        try {
+            val detStart = System.currentTimeMillis()
+            val (dw, dh) = PaddleDecoder.detInputSize(source.width, source.height, options.limitSide)
+            val detScaled = Bitmap.createScaledBitmap(source, dw, dh, true)
+            val detPixels = IntArray(dw * dh).also { detScaled.getPixels(it, 0, dw, 0, 0, dw, dh) }
+            if (detScaled !== source) detScaled.recycle()
+            val prob = OnnxTensor.createTensor(env, FloatBuffer.wrap(PaddleDecoder.detTensor(detPixels, dw, dh)), longArrayOf(1, 3, dh.toLong(), dw.toLong())).use { input ->
+                detector.run(mapOf(detector.inputNames.first() to input)).use { out ->
+                    val tensor = out.get(0) as OnnxTensor
+                    val buffer = tensor.floatBuffer
+                    FloatArray(buffer.remaining()).also { buffer.get(it) }
+                }
             }
-        }
-        val boxes = PaddleDecoder.boxes(prob, dw, dh, options)
-        val detMs = System.currentTimeMillis() - detStart
+            val boxes = PaddleDecoder.boxes(prob, dw, dh, options)
+            val detMs = System.currentTimeMillis() - detStart
 
-        val recStart = System.currentTimeMillis()
-        val sx = source.width.toFloat() / dw
-        val sy = source.height.toFloat() / dh
-        val lines = boxes.mapNotNull { box ->
-            val left = floor(box.left * sx).toInt().coerceIn(0, source.width - 1)
-            val top = floor(box.top * sy).toInt().coerceIn(0, source.height - 1)
-            val right = ceil(box.right * sx).toInt().coerceIn(left + 1, source.width)
-            val bottom = ceil(box.bottom * sy).toInt().coerceIn(top + 1, source.height)
-            recognizeLine(source, BoundingBox(left, top, right, bottom))
+            val recStart = System.currentTimeMillis()
+            val sx = source.width.toFloat() / dw
+            val sy = source.height.toFloat() / dh
+            val lines = boxes.mapNotNull { box ->
+                val left = floor(box.left * sx).toInt().coerceIn(0, source.width - 1)
+                val top = floor(box.top * sy).toInt().coerceIn(0, source.height - 1)
+                val right = ceil(box.right * sx).toInt().coerceIn(left + 1, source.width)
+                val bottom = ceil(box.bottom * sy).toInt().coerceIn(top + 1, source.height)
+                recognizeLine(source, BoundingBox(left, top, right, bottom))
+            }
+            lastTimings = Timings(detMs, System.currentTimeMillis() - recStart, boxes.size)
+            return lines
+        } finally {
+            if (source !== bitmap) source.recycle()
         }
-        if (source !== bitmap) source.recycle()
-        lastTimings = Timings(detMs, System.currentTimeMillis() - recStart, boxes.size)
-        return lines
     }
 
     private fun recognizeLine(source: Bitmap, box: BoundingBox): OcrLine? {

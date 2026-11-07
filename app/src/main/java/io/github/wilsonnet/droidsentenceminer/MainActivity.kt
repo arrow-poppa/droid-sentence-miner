@@ -49,12 +49,21 @@ import io.github.wilsonnet.droidsentenceminer.ui.theme.DsmTheme
 
 class MainActivity : ComponentActivity() {
 
+    private var aiSettingsRequest by mutableIntStateOf(0)
+
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        if (intent.getBooleanExtra("open_ai_settings", false)) aiSettingsRequest++
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        if (intent?.getBooleanExtra("open_ai_settings", false) == true) aiSettingsRequest++
         enableEdgeToEdge()
         setContent {
             DsmTheme {
-                AppRoot(openAi = intent?.getBooleanExtra("open_ai_settings", false) == true)
+                AppRoot(aiSettingsRequest)
             }
         }
     }
@@ -80,13 +89,19 @@ private val TABS = listOf(
 )
 
 @Composable
-private fun AppRoot(openAi: Boolean = false) {
-    var tab by rememberSaveable { mutableIntStateOf(if (openAi) 3 else 0) }
+private fun AppRoot(aiSettingsRequest: Int = 0) {
+    var tab by rememberSaveable { mutableIntStateOf(0) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val sharedPhoto by remember { AppContainer.from(context).sharedBookPhoto }.collectAsState()
     androidx.compose.runtime.LaunchedEffect(sharedPhoto) { if (sharedPhoto != null) tab = 1 }
     // Dictionaries and Anki setup live under Settings; null = the settings list itself.
-    var settingsPage by rememberSaveable { mutableStateOf<String?>(if (openAi) PAGE_AI else null) }
+    var settingsPage by rememberSaveable { mutableStateOf<String?>(null) }
+    androidx.compose.runtime.LaunchedEffect(aiSettingsRequest) {
+        if (aiSettingsRequest > 0) {
+            tab = 3
+            settingsPage = PAGE_AI
+        }
+    }
     // Tablets and landscape phones: tabs in a side rail, so the bottom bar doesn't eat the short side.
     val wide = LocalConfiguration.current.screenWidthDp >= 600
     val select = { index: Int ->

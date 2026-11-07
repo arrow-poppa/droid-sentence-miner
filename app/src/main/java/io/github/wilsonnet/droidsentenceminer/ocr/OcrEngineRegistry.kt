@@ -29,6 +29,8 @@ class OcrEngineRegistry(private val context: Context, private val prefs: DsmPref
 
     private data class MlKitKey(val script: MlKitScript, val twoPass: Boolean, val dropNoise: Boolean, val profile: TextProfile)
 
+    // Two-pass/noise/profile wrappers share one actual recognizer per script.
+    private val mlKitClients = ConcurrentHashMap<MlKitScript, com.google.mlkit.vision.text.TextRecognizer>()
     private val mlKitEngines = ConcurrentHashMap<MlKitKey, MlKitOcr>()
 
     @Volatile
@@ -55,6 +57,7 @@ class OcrEngineRegistry(private val context: Context, private val prefs: DsmPref
     suspend fun engine(twoPass: Boolean, dropNoise: Boolean = true, preferred: String? = null): OcrEngine = withContext(Dispatchers.IO) {
         val choice = choice(preferred)
         if (choice.engine != DsmPrefs.ENGINE_PADDLE) releasePaddle()
+        if (choice.engine != DsmPrefs.ENGINE_MEIKI) MeikiOcr.unload()
         when (choice.engine) {
             DsmPrefs.ENGINE_MEIKI -> {
                 MeikiModels.installVariants(context)
@@ -77,10 +80,8 @@ class OcrEngineRegistry(private val context: Context, private val prefs: DsmPref
 
     private fun mlKit(script: MlKitScript, twoPass: Boolean, dropNoise: Boolean, profile: TextProfile): MlKitOcr =
         mlKitEngines.getOrPut(MlKitKey(script, twoPass, dropNoise, profile)) {
-            if (script == MlKitScript.JAPANESE && profile.isJapanese) {
-                MlKitJapaneseOcr(twoPass = twoPass, dropNoise = dropNoise)
-            } else {
-                MlKitOcr(script, twoPass = twoPass, dropNoise = dropNoise, profile = profile)
+            MlKitOcr(script, twoPass = twoPass, dropNoise = dropNoise, profile = profile) {
+                mlKitClients.computeIfAbsent(script) { it.newClient() }
             }
         }
 

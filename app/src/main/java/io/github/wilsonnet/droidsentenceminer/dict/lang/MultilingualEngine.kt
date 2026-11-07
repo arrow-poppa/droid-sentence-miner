@@ -9,6 +9,8 @@ import io.github.wilsonnet.droidsentenceminer.dict.TermHead
 import io.github.wilsonnet.droidsentenceminer.dict.TermResult
 import io.github.wilsonnet.droidsentenceminer.dict.toTermResult
 import java.util.concurrent.ConcurrentHashMap
+import java.text.BreakIterator
+import java.util.Locale
 
 /**
  * Tap selection, line scans and word lookups for every language except Japanese (which keeps its
@@ -99,17 +101,18 @@ internal class MultilingualEngine(
 
     private fun joinsApostrophes(language: String) = language == "en" || language == "fr" || language == "it"
 
-    private fun codePointRange(text: String, index: Int): IntRange {
-        var start = index
-        if (Character.isLowSurrogate(text[start]) && start > 0 && Character.isHighSurrogate(text[start - 1])) start--
-        val length = Character.charCount(text.codePointAt(start))
-        return start until start + length
+    private fun graphemeRange(text: String, index: Int): IntRange {
+        // A fallback tap on punctuation/emoji must not split combining or joined sequences.
+        val boundaries = BreakIterator.getCharacterInstance(Locale.ROOT).apply { setText(text) }
+        val start = if (boundaries.isBoundary(index)) index else boundaries.preceding(index)
+        val end = boundaries.following(index)
+        return start until end
     }
 
     private suspend fun spacedRange(text: String, index: Int, language: String, parser: LanguageParser): IntRange {
         val tokens = WordSpans.tokenize(text, joinsApostrophes(language))
         val k = WordSpans.tokenIndexAt(tokens, index)
-        if (k < 0) return codePointRange(text, index)
+        if (k < 0) return graphemeRange(text, index)
         val token = tokens[k]
         val word = token.start until token.end
         val spans = WordSpans.spansContaining(text, tokens, k)
@@ -141,7 +144,7 @@ internal class MultilingualEngine(
 
     /** Code point start offsets of the contiguous run of [isScript] characters around [index], clipped to ±[window] code points. */
     private fun unspacedWindow(text: String, index: Int, window: Int, isScript: (Int) -> Boolean): Pair<IntArray, Int>? {
-        val tapped = codePointRange(text, index).first
+        val tapped = graphemeRange(text, index).first
         if (!isScript(text.codePointAt(tapped))) return null
         val starts = ArrayDeque<Int>()
         starts.addLast(tapped)
@@ -170,7 +173,7 @@ internal class MultilingualEngine(
         val isScript = scriptPredicate(language)
         val window = unspacedWindow(text, index, max, isScript) ?: return spacedRange(text, index, language, parser)
         val (starts, tapped) = window
-        val single = codePointRange(text, index)
+        val single = graphemeRange(text, index)
         val dicts = dictionaries()
         if (dicts.isEmpty()) return single
         // Every span of 2..max characters that contains the tapped one.

@@ -34,4 +34,12 @@ class MlKitLanguageCatalogTest {
         assertNull(MlKitLanguageCatalog.find("tk")?.recognizer)
         assertNull(MlKitLanguageCatalog.find("ru"))
     }
+    @Test
+    fun officialAliasesAndRegionCodesKeepTheirCatalogProfile() {
+        assertEquals("fil", MlKitLanguageCatalog.find("tl")?.code)
+        assertEquals("sr-Latn", MlKitLanguageCatalog.find("sr-Latn-RS")?.code)
+        assertEquals("pt", MlKitLanguageCatalog.find(" PT_br ")?.code)
+        assertEquals(TextProfile.CYRILLIC, TextProfile.forLanguage("tk"))
+    }
+
 }

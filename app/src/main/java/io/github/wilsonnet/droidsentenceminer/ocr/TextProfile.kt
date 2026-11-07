@@ -25,18 +25,29 @@ class TextProfile private constructor(
     val allowsVertical: Boolean get() = this === JAPANESE || this === CHINESE
 
     /** A letter of this profile's writing system. */
-    fun isTarget(ch: Char): Boolean {
-        if (isJapanese) return JapaneseTextScore.isJapanese(ch)
-        if (!ch.isLetter() && Character.getType(ch) != Character.NON_SPACING_MARK.toInt() &&
-            Character.getType(ch) != Character.COMBINING_SPACING_MARK.toInt()
+    fun isTarget(ch: Char): Boolean = isTargetCodePoint(ch.code)
+
+    private fun isTargetCodePoint(cp: Int): Boolean {
+        if (isJapanese && cp <= Char.MAX_VALUE.code) return JapaneseTextScore.isJapanese(cp.toChar())
+        if (!Character.isLetter(cp) && Character.getType(cp) != Character.NON_SPACING_MARK.toInt() &&
+            Character.getType(cp) != Character.COMBINING_SPACING_MARK.toInt()
         ) {
             return false
         }
-        val script = UnicodeScript.of(ch.code)
-        return script in scripts || (script == UnicodeScript.INHERITED && ch.code in 0x0300..0x036F && UnicodeScript.LATIN in scripts)
+        val script = UnicodeScript.of(cp)
+        return script in scripts || (script == UnicodeScript.INHERITED && cp in 0x0300..0x036F && UnicodeScript.LATIN in scripts)
     }
 
-    fun count(text: String): Int = text.count(::isTarget)
+    fun count(text: String): Int {
+        var count = 0
+        var offset = 0
+        while (offset < text.length) {
+            val cp = text.codePointAt(offset)
+            if (isTargetCodePoint(cp)) count++
+            offset += Character.charCount(cp)
+        }
+        return count
+    }
 
     /** Higher reads better; the two-pass refinement keeps the higher-scoring read. */
     fun score(text: String): Double {
@@ -46,17 +57,20 @@ class TextProfile private constructor(
         var letters = 0
         var good = 0
         var bad = 0
-        for (ch in text) {
+        var offset = 0
+        while (offset < text.length) {
+            val cp = text.codePointAt(offset)
             when {
-                ch == '�' -> bad += 4
-                ch.isWhitespace() -> Unit
-                ch.isLetterOrDigit() -> {
+                cp == 0xfffd -> bad += 4
+                Character.isWhitespace(cp) -> Unit
+                Character.isLetterOrDigit(cp) -> {
                     good++
                     letters++
-                    if (isTarget(ch)) target++
+                    if (isTargetCodePoint(cp)) target++
                 }
                 else -> good++
             }
+            offset += Character.charCount(cp)
         }
         if (letters == 0) return 0.0
         val penalty = bad.toDouble() / (good + bad).coerceAtLeast(1)
@@ -71,11 +85,14 @@ class TextProfile private constructor(
     fun ratio(text: String): Float {
         var significant = 0
         var target = 0
-        for (ch in text) {
-            if (ch.isLetterOrDigit()) {
+        var offset = 0
+        while (offset < text.length) {
+            val cp = text.codePointAt(offset)
+            if (Character.isLetterOrDigit(cp)) {
                 significant++
-                if (isTarget(ch)) target++
+                if (isTargetCodePoint(cp)) target++
             }
+            offset += Character.charCount(cp)
         }
         return if (significant == 0) 0f else target.toFloat() / significant
     }
@@ -117,7 +134,7 @@ class TextProfile private constructor(
                 base == "el" -> GREEK
                 base == "th" -> THAI
                 base == "he" || base == "yi" -> HEBREW
-                base in CYRILLIC_LANGS -> CYRILLIC
+                base in CYRILLIC_LANGS || MlKitLanguageCatalog.find(code)?.script == "Cyrl" -> CYRILLIC
                 base in ARABIC_LANGS -> ARABIC
                 base in DEVANAGARI_LANGS -> DEVANAGARI
                 else -> LATIN

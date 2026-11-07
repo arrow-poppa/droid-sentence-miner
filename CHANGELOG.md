@@ -13,6 +13,8 @@ versions are the `v*` tags that publish a signed APK on
 - Optional BYOK explanations in lookup popups: OpenAI, Gemini, DeepSeek, OpenRouter and custom compatible endpoints, streaming, cancellation, cache and encrypted API keys.
 
 ### Fixed
+- Unknown-word taps in text views and recursive definition lookups use language-aware whole-word selection.
+- AI configuration opens correctly when the app is already running; streaming fallback respects the streaming toggle and hides echoed authorization headers.
 - ML Kit overlay coordinates now map back from upscaled recognition images; RTL fragments join in reading order.
 - Dictionary expression probes cover either side of a tap; Anki sentence highlights retain the original inflected surface.
 - PaddleOCR uses the selected text profile independently of its model and verifies model bytes before session loading.

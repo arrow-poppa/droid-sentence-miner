@@ -117,7 +117,7 @@ object AiRequestBuilder {
         if ((body["messages"] as? JsonArray)?.isNotEmpty() != true) {
             body = JsonObject(body + ("messages" to messages))
         }
-        if (stream) body = JsonObject(body + ("stream" to JsonPrimitive(true)))
+        if (stream || "stream" in body) body = JsonObject(body + ("stream" to JsonPrimitive(stream)))
         val headers = buildMap {
             put("Authorization", "Bearer $key")
             if (stream) put("Accept", "text/event-stream")
@@ -309,9 +309,9 @@ object AiRequestBuilder {
         return try {
             if (json.parseToJsonElement(raw.trim()) is JsonObject) null else "Expected a JSON object."
         } catch (e: SerializationException) {
-            "Invalid JSON: ${e.message?.lineSequence()?.firstOrNull().orEmpty().take(120)}"
+            "Invalid JSON object."
         } catch (e: IllegalArgumentException) {
-            "Invalid JSON: ${e.message?.lineSequence()?.firstOrNull().orEmpty().take(120)}"
+            "Invalid JSON object."
         }
     }
 
@@ -323,7 +323,7 @@ object AiRequestBuilder {
         } catch (e: SerializationException) {
             throw AiException(
                 AiErrorKind.INVALID_SETTINGS,
-                "Invalid Custom Request Body JSON: ${e.message?.lineSequence()?.firstOrNull().orEmpty().take(120)}",
+                "Invalid Custom Request Body JSON.",
                 retryable = false,
             )
         } catch (e: IllegalArgumentException) {

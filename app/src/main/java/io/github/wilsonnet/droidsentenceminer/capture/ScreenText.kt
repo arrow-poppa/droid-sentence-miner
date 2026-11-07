@@ -66,7 +66,7 @@ object ScreenText {
             }
             if (!inKept) return@mapNotNull null
             val text = if (profile.isJapanese) PageLayout.clean(line.text) else line.text.trim()
-            if (text.isEmpty() || text.none(profile::isTarget)) return@mapNotNull null
+            if (text.isEmpty() || profile.count(text) == 0) return@mapNotNull null
             val vertical = profile.allowsVertical && line.box.height > line.box.width * 1.3f && text.length >= 2
             var glyphs = PageLayout.glyphsOf(line, text, vertical)
             // Evenly split boxes run left to right; an RTL line's first (logical) character is drawn rightmost.

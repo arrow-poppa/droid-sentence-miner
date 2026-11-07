@@ -4,7 +4,9 @@
 
 ## Multilingual implementation branch
 
-Multilingual continuation: the previous OCR CI run [42410311434](https://github.com/arrow-poppa/droid-sentence-miner/actions/runs/42410311434) compiled the APK and ran 239 tests with one catalog-count failure. The combined parser/BYOK integration is awaiting CI; no local compilation or Android runtime benchmarks have been run in this continuation.
+Multilingual continuation: the previous OCR CI run [42410311434](https://github.com/arrow-poppa/droid-sentence-miner/actions/runs/42410311434) compiled the APK and ran 239 tests with one catalog-count failure. Integration `9eafb28` compiled the app but exposed a coroutine-scope test-helper compilation error.
+Follow-up `259b1d5` ([run 42418618474](https://github.com/arrow-poppa/droid-sentence-miner/actions/runs/42418618474))
+ran 375 tests, 3 failed; fixes are awaiting the next CI. no local compilation or Android runtime benchmarks have been run in this continuation.
 
 What was measured, on which device, and how. Recipes and scripts: [`.opencode/skills/dsm-ocr-eval`](../.opencode/skills/dsm-ocr-eval/SKILL.md), [`dsm-audio`](../.opencode/skills/dsm-audio/SKILL.md), [`dsm-debug-api`](../.opencode/skills/dsm-debug-api/SKILL.md), `tools/`.
 

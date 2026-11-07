@@ -32,5 +32,6 @@ Ideas and known gaps, roughly in priority order. Shipped work moves to [CHANGELO
 - Multilingual hardening: physical-device ML Kit module delivery, PaddleOCR geometry/RTL accuracy,
   and Japanese OCR/Anki regression validation with the integrated parser and BYOK popup.
 - NCNN FP16 backend and measured ONNX/NCNN comparison; not implemented.
-- Evaluate secondary OCR engines only with verified Android runtimes and redistribution rights;
-  OneOCR, IndraOCR, ScreenAI, Lens and Bing are not functional backends in this build.
+- Secondary OCR: port/validate Indra ONNX with separate model-license handling; verify distribution
+  rights and Android artifacts before considering OneOCR/ScreenAI; use documented permitted APIs
+  for online Lens/Bing. See `multilingual.md` for source evidence.

@@ -70,11 +70,12 @@ open class MlKitOcr(
     private val twoPass: Boolean = true,
     private val dropNoise: Boolean = true,
     val profile: TextProfile = TextProfile.JAPANESE,
+    private val clientFactory: () -> TextRecognizer = { script.newClient() },
 ) : OcrEngine {
 
     override val name: String = "ML Kit ${script.label}"
 
-    private val recognizer by lazy { script.newClient() }
+    private val recognizer by lazy(clientFactory)
 
     /** The ML Kit client, for module availability checks (Google Play–delivered scripts). */
     val client: TextRecognizer get() = recognizer

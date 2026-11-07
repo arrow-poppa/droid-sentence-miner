@@ -87,6 +87,9 @@ changes can be validated with `curl` on a real device. Before opening a PR, read
 in the same commit ([checklist](.opencode/skills/dsm-docs/SKILL.md)). The website lives in
 [`site/`](site/) (Astro + Starlight).
 
+Multilingual development is tracked on `feature/multilingual-ocr-parser-byok`; see
+[capabilities and validation gaps](docs/multilingual.md).
+
 ## Credits
 
 This project stands on the shoulders of these projects — thank you:
@@ -123,16 +126,13 @@ This project stands on the shoulders of these projects — thank you:
 - **[Jitendex](https://jitendex.org/)** and **[jmDict for Yomitan](https://github.com/yomidevs/jmdict-yomitan)**
   — the one-click recommended dictionaries (installed from their official releases).
 
+- **[Chimahon](https://github.com/arrow-poppa/chimahon)** and **[Fushi](https://github.com/arrow-poppa/Fushi)** (GPL-3.0) — multilingual rules and English selection/irregulars.
+- **[Yomitan BYOK](https://github.com/arrow-poppa/yomitan-byok-ai)** (GPL-3.0) — contextual AI provider behavior.
+- **PaddlePaddle** (Apache-2.0 model artifacts) — pinned PaddleOCR ONNX models downloaded on demand.
+
 Droid Sentence Miner is not affiliated with Anki, AnkiDroid, Yomitan, Jiten or GameSentenceMiner.
 
 ## License
 
 [GPL-3.0](LICENSE). The adapted Yomihon deinflector remains available under its Apache-2.0 license
 wherever required; see the file header for details.
-
-Multilingual development is tracked on `feature/multilingual-ocr-parser-byok`; see
-[capabilities and validation gaps](docs/multilingual.md). Parser/OCR adaptations draw on
-[Chimahon](https://github.com/arrow-poppa/chimahon), English matching on
-[Fushi](https://github.com/arrow-poppa/Fushi), and BYOK on
-[Yomitan BYOK](https://github.com/arrow-poppa/yomitan-byok-ai) (GPL-3.0).
-PaddlePaddle's pinned OCR artifacts are downloaded on demand (Apache-2.0).

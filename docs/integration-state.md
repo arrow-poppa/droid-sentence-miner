@@ -43,7 +43,9 @@ The prior Claude session reached its usage limit; do not assume an active review
 - Application scan/tap/lookup/mining entry points now pass `studyLanguage`.
 - Integration `9eafb28` compiled the app APK in CI run `42418120327` but test compilation failed
   because the recovered AI test helper lacked a CoroutineScope receiver; corrected in the follow-up.
-- Combined CI validation pending. See [multilingual.md](multilingual.md) for capabilities and gaps.
+- Follow-up `259b1d5`, run `42418618474`: 375 tests, 3 failures. Fixes address German weak-verb
+  POS compatibility, redaction of echoed headers and MockWebServer request throttling in the
+  cancellation fixture. Full combined validation is pending the next CI. See [multilingual.md](multilingual.md) for capabilities and gaps.
 - M6 optional backends and NCNN remain unimplemented and absent from the engine picker.
 
 ## Next verification

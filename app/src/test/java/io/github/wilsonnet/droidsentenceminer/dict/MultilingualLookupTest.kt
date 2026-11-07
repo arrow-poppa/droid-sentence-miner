@@ -376,4 +376,11 @@ class MultilingualLookupTest {
         assertEquals("world", l.select("world", 100, "en").surface)
     }
 
+    @Test
+    fun `unknown emoji fallback retains the whole grapheme`() {
+        val text = "a 👩‍💻 b"
+        val l = lookup(store())
+        assertEquals("👩‍💻", l.select(text, text.indexOf("👩"), "en").surface)
+    }
+
 }

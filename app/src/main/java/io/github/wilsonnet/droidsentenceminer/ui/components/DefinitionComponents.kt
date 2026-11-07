@@ -74,6 +74,9 @@ fun WebViewBlock(
     /** The dictionary picked for each entry's card; entries without one keep the setting's choice. */
     cardPicks: Map<Int, Long> = emptyMap(),
 ) {
+    val context = LocalContext.current
+    val container = remember { AppContainer.from(context) }
+    val scope = rememberCoroutineScope()
     val tapHandler = androidx.compose.runtime.rememberUpdatedState(onTextTap)
     val mineHandler = androidx.compose.runtime.rememberUpdatedState(onEntryMine)
     val editHandler = androidx.compose.runtime.rememberUpdatedState(onEntryEdit)
@@ -106,6 +109,18 @@ fun WebViewBlock(
                                 @android.webkit.JavascriptInterface
                                 fun tap(text: String, context: String) {
                                     post { tapHandler.value?.invoke(text, context) }
+                                }
+
+                                @android.webkit.JavascriptInterface
+                                fun tapAt(text: String, index: Int, sentence: String) {
+                                    post {
+                                        scope.launch {
+                                            if (text.isEmpty()) return@launch
+                                            val range = container.wordRange(text, index)
+                                            val surface = text.substring(range)
+                                            tapHandler.value?.invoke(surface, sentence)
+                                        }
+                                    }
                                 }
 
                                 @android.webkit.JavascriptInterface
@@ -233,17 +248,17 @@ document.addEventListener('click', function (e) {
   }
   if (off >= node.textContent.length) return;
   var block = node.parentElement.closest('li,p,td,div') || document.body;
-  var range = document.createRange(); range.setStart(node, off); range.setEnd(block, block.childNodes.length);
-  var after = range.cloneContents(); after.querySelectorAll('rt,rp').forEach(function (n) { n.remove(); });
+  var range = document.createRange(); range.selectNodeContents(block); range.setEnd(node, off);
+  var before = range.cloneContents(); before.querySelectorAll('rt,rp').forEach(function (n) { n.remove(); });
   var whole = block.cloneNode(true); whole.querySelectorAll('rt,rp').forEach(function (n) { n.remove(); });
-  dsm.tap(after.textContent.substring(0, 24), whole.textContent.trim());
+  dsm.tapAt(whole.textContent, before.textContent.length, whole.textContent.trim());
 });
 </script>"""
 
 /** A lookup in the popup's history; recursive lookups from the definition push new ones. */
 private data class LookupEntry(val word: String, val sentence: String)
 
-/** Recursive lookup: tapping Japanese in a definition pushes its first word. */
+/** Recursive lookup keeps the full original word selected by the language-aware tap bridge. */
 @Composable
 private fun rememberLookupStack(word: String, sentence: String): androidx.compose.runtime.snapshots.SnapshotStateList<LookupEntry> =
     remember(word, sentence) { androidx.compose.runtime.mutableStateListOf(LookupEntry(word, sentence)) }
@@ -254,10 +269,11 @@ private fun recursiveTap(stack: MutableList<LookupEntry>): (String, String) -> U
     val container = remember { AppContainer.from(context) }
     val scope = rememberCoroutineScope()
     return { text, sentence ->
-        if (text.isNotEmpty() && TermLookup.isLookupable(text[0])) {
+        if (text.isNotEmpty() && text.any { it.isLetterOrDigit() }) {
             scope.launch {
-                val first = container.scanText(text).firstOrNull { it.start == 0 } ?: return@launch
-                if (first.text != stack.last().word) stack += LookupEntry(first.text, sentence.take(300))
+                val range = container.wordRange(text, 0)
+                val surface = text.substring(range)
+                if (surface != stack.last().word) stack += LookupEntry(surface, sentence.take(300))
             }
         }
     }

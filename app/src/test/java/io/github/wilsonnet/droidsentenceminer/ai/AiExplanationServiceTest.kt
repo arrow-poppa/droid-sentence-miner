@@ -459,7 +459,15 @@ class AiExplanationServiceTest {
             override fun canceled(call: Call) { canceled.countDown() }
         }).build()
         val body = (1..100).joinToString("") { "data: ${openAiChunk("x")}\n\n" }
-        val server = srv { enqueue(MockResponse().setHeader("Content-Type", "text/event-stream").setBody(body).throttleBody(20, 1, TimeUnit.SECONDS)) }
+        val server = srv {
+            // QueueDispatcher applies throttling to the incoming request too. Return the
+            // throttled response only after receiving the full request, then cancel mid-stream.
+            dispatcher = object : okhttp3.mockwebserver.Dispatcher() {
+                override fun dispatch(request: okhttp3.mockwebserver.RecordedRequest) =
+                    MockResponse().setHeader("Content-Type", "text/event-stream").setBody(body)
+                        .throttleBody(20, 1, TimeUnit.SECONDS)
+            }
+        }
         val svc = service(FakeSettings(testSettings(streaming = true, endpoint = server.endpoint())), client = client)
         blocking {
             val job = CoroutineScope(Dispatchers.IO).launch { svc.explain(REQ).collect { } }
@@ -685,4 +693,36 @@ class AiExplanationServiceTest {
         assertTrue(canceled.await(5, TimeUnit.SECONDS))
         assertTrue(states.none { it is AiExplanationState.Done })
     }
+    @Test(timeout = 30_000)
+    fun `a non-streaming retry overrides stream true in custom body`() {
+        val server = srv {
+            enqueue(MockResponse().setResponseCode(501))
+            enqueue(jsonOk("plain"))
+        }
+        val settings = testSettings(streaming = true, endpoint = server.endpoint(), provider = ProviderSettings(requestBodyJson = """{"stream":true}"""))
+        assertEquals(done("plain"), last(service(FakeSettings(settings)).explain(REQ).collectAll()))
+        assertEquals("true", server.takeRequest().bodyJson()["stream"]!!.jsonPrimitive.content)
+        assertEquals("false", server.takeRequest().bodyJson()["stream"]!!.jsonPrimitive.content)
+    }
+
+    @Test(timeout = 30_000)
+    fun `invalid model error is not retried as a streaming incompatibility`() {
+        val server = srv {
+            enqueue(MockResponse().setResponseCode(400).setBody("""{"error":{"message":"unknown model"}}"""))
+            enqueue(jsonOk("unexpected"))
+        }
+        val settings = FakeSettings(testSettings(streaming = true, endpoint = server.endpoint()))
+        assertTrue(last(service(settings).explain(REQ).collectAll()) is AiExplanationState.Error)
+        assertEquals(1, server.requestCount)
+    }
+
+    @Test(timeout = 30_000)
+    fun `oversized JSON explanations fail without entering the cache`() {
+        val server = srv { enqueue(jsonOk("x".repeat(1024 * 1024 + 1))) }
+        val svc = service(FakeSettings(testSettings(endpoint = server.endpoint())))
+        val state = last(svc.explain(REQ).collectAll())
+        assertTrue(state is AiExplanationState.Error)
+        assertNull(blocking { svc.cached(REQ) })
+    }
+
 }

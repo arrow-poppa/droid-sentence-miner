@@ -56,4 +56,13 @@ class MultilingualPostProcessorTest {
         assertEquals("مرحبا بالعالم", merged.single().text)
     }
 
+    @Test
+    fun shortNonJapaneseWordsRemainBesideLongerDialogue() {
+        val rows = listOf(
+            OcrPostProcessor.MergedLine("Longer dialogue", BoundingBox(0, 0, 400, 40)),
+            OcrPostProcessor.MergedLine("I", BoundingBox(0, 50, 20, 90)),
+        )
+        assertEquals(listOf("Longer dialogue", "I"), SubtitleLineFilter.filter(rows, TextProfile.LATIN).map { it.text })
+    }
+
 }

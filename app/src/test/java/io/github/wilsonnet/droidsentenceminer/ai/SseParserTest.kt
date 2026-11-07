@@ -78,4 +78,10 @@ class SseParserTest {
     fun `blank lines without data dispatch nothing`() {
         assertEquals(emptyList<String>(), parse("\n\n\r\n\n"))
     }
+    @Test(expected = AiException::class)
+    fun `unterminated oversized events cannot grow without a bound`() {
+        val parser = SseParser { }
+        parser.feed(ByteArray(SseParser.MAX_EVENT_BYTES + 1) { 'x'.code.toByte() })
+    }
+
 }

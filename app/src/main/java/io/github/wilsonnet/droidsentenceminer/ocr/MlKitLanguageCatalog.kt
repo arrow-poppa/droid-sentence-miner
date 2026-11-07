@@ -206,7 +206,12 @@ object MlKitLanguageCatalog {
 
     /** Exact BCP-47 match first, then the base language (pt-BR → pt). */
     fun find(code: String): MlKitLanguage? {
-        val key = code.lowercase()
-        return byCode[key] ?: byCode[key.substringBefore('-')]
+        var key = code.trim().lowercase().replace('_', '-')
+        if (key == "tl") key = "fil" // Google's documented Filipino alias.
+        while (true) {
+            byCode[key]?.let { return it }
+            if ('-' !in key) return null
+            key = key.substringBeforeLast('-')
+        }
     }
 }

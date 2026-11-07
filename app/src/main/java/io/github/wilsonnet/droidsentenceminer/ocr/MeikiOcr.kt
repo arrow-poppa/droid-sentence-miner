@@ -322,7 +322,7 @@ class MeikiOcr private constructor(
 
         fun unload() {
             synchronized(this) {
-                shared?.close()
+                shared?.let { old -> synchronized(old) { old.close() } }
                 shared = null
             }
         }
