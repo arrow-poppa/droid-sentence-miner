@@ -83,11 +83,13 @@ open class MlKitOcr(
         var lines: List<OcrLine> = emptyList()
         val elapsed = measureTimeMillis {
             val prepared = ImagePreprocessor.upscaleForOcr(bitmap)
-            lines = recognizeOnce(prepared)
-
-            val merged = OcrPostProcessor.merge(lines, dropNoise = dropNoise, profile = profile)
-            if (twoPass && merged.isNotEmpty()) {
-                lines = refine(prepared, merged)
+            try {
+                val first = recognizeOnce(prepared)
+                val merged = OcrPostProcessor.merge(first, dropNoise = dropNoise, profile = profile)
+                val read = if (twoPass && merged.isNotEmpty()) refine(prepared, merged, first) else first
+                lines = read.map { OcrGeometry.toSource(it, prepared.width, prepared.height, bitmap.width, bitmap.height) }
+            } finally {
+                if (prepared !== bitmap) prepared.recycle()
             }
         }
         val text = OcrPostProcessor.toSentenceText(OcrPostProcessor.merge(lines, dropNoise = dropNoise, profile = profile), profile)
@@ -119,7 +121,7 @@ open class MlKitOcr(
      * Second pass: for each consolidated line, crop + upscale and re-run recognition,
      * keeping the better reading. Capped to avoid long scans.
      */
-    private suspend fun refine(bitmap: Bitmap, merged: List<OcrPostProcessor.MergedLine>): List<OcrLine> {
+    private suspend fun refine(bitmap: Bitmap, merged: List<OcrPostProcessor.MergedLine>, original: List<OcrLine>): List<OcrLine> {
         val lines = merged.map { OcrLine(text = it.text, box = it.box) }
         val refined = ArrayList<OcrLine>(lines.size)
         val candidates = lines
@@ -129,13 +131,23 @@ open class MlKitOcr(
         for (line in candidates) {
             val crop = ImagePreprocessor.crop(bitmap, line.box, padding = 16)
             val scaled = ImagePreprocessor.upscaleForOcr(crop, minWidth = crop.width * 2)
-            val result = runCatching { recognizeOnce(scaled) }.getOrNull()
-            if (result.isNullOrEmpty()) continue
-            val candidateText = OcrPostProcessor.merge(result, dropNoise = dropNoise, profile = profile).joinToString("\n") { it.text }
-            if (profile.score(candidateText) > profile.score(line.text) + SCORE_MARGIN) {
-                refinedByKey[keyOf(line)] = candidateText
+            try {
+                val result = recognizeOnce(scaled)
+                if (result.isEmpty()) continue
+                val candidateText = OcrPostProcessor.merge(result, dropNoise = dropNoise, profile = profile).joinToString("\n") { it.text }
+                if (profile.score(candidateText) > profile.score(line.text) + SCORE_MARGIN) {
+                    refinedByKey[keyOf(line)] = candidateText
+                }
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
+            } catch (_: Exception) {
+                // A failed optional second pass keeps the original read.
+            } finally {
+                if (scaled !== crop && scaled !== bitmap) scaled.recycle()
+                if (crop !== bitmap) crop.recycle()
             }
         }
+        if (refinedByKey.isEmpty()) return original
         for (line in lines) {
             val better = refinedByKey[keyOf(line)]
             refined += if (better != null) line.copy(text = better) else line

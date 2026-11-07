@@ -135,7 +135,7 @@ internal object WordSpans {
         var left = k
         while (k - left < MAX_WORDS - 1 && joinable(text, tokens, left - 1)) left--
         var right = k
-        while (right - left < MAX_WORDS - 1 && joinable(text, tokens, right)) right++
+        while (right - k < MAX_WORDS - 1 && joinable(text, tokens, right)) right++
         val spans = ArrayList<Span>()
         for (from in left..k) {
             for (to in maxOf(k, from + 1)..minOf(right, from + MAX_WORDS - 1)) {

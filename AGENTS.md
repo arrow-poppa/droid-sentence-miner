@@ -156,6 +156,12 @@ See `.opencode/skills/dsm-debug-api/SKILL.md` for the full reference and recipes
 
 ## Gotchas learned the hard way
 
+- **Multilingual coordinates and surfaces**: `OcrGeometry` maps ML Kit's upscaled line/symbol boxes
+  to the input crop. `AppContainer` passes the study language to scan/tap/lookup; parser candidates
+  never replace source spans. Keep `ScreenTextLine.confidence` null when unreported. See
+  `docs/multilingual.md` and `docs/integration-state.md` for current validation limits.
+
+
 - **Auto OCR / text log / replay buffer** (GSM model): `AutoOcrController` polls new frames,
   OCRs the saved region, and `TextLineTracker` turns stable reads into lines (start = first
   differing read). `AudioRingBuffer` keeps the last N minutes of mono 24 kHz playback audio by

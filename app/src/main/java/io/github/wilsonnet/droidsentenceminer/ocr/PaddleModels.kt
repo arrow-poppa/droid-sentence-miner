@@ -2,6 +2,8 @@ package io.github.wilsonnet.droidsentenceminer.ocr
 
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -109,6 +111,8 @@ object PaddleModels {
     private const val YML = "inference.yml"
     const val DICT = "dict.txt"
     private const val INFO = "MODEL_INFO"
+    private const val DICT_HASH = "DICT_SHA256"
+    private val locks = PaddleComponent.entries.associateWith { Mutex() }
 
     private val states = PaddleComponent.entries.associateWith { MutableStateFlow<State?>(null) }
 
@@ -144,20 +148,36 @@ object PaddleModels {
 
     fun dictFile(context: Context, component: PaddleComponent) = File(dir(context, component), DICT)
 
-    fun delete(context: Context, component: PaddleComponent) {
-        dir(context, component).deleteRecursively()
-        File(root(context), "${component.id}.part").deleteRecursively()
-        states.getValue(component).value = State.NotInstalled
+    suspend fun delete(context: Context, component: PaddleComponent) = withContext(Dispatchers.IO) {
+        locks.getValue(component).withLock {
+            dir(context, component).deleteRecursively()
+            File(root(context), "${component.id}.part").deleteRecursively()
+            states.getValue(component).value = State.NotInstalled
+        }
+    }
+
+    /** Verify bytes before creating inference sessions, including same-size corrupt files. */
+    fun verified(context: Context, component: PaddleComponent): Boolean {
+        if (!installed(context, component)) return false
+        val directory = dir(context, component)
+        return sha256(File(directory, ONNX)) == component.onnxSha256 &&
+            (component.isDetector || File(directory, DICT_HASH).let { hash ->
+                hash.isFile && hash.readText().trim() == sha256(File(directory, DICT))
+            })
     }
 
     /** Downloads every missing component of [components]. Returns null on success, else the error. */
     suspend fun download(context: Context, components: List<PaddleComponent>): String? {
-        for (component in components) {
-            if (installed(context, component)) {
-                states.getValue(component).value = State.Installed
-                continue
+        for (component in components.distinct()) {
+            val error = locks.getValue(component).withLock {
+                if (withContext(Dispatchers.IO) { verified(context, component) }) {
+                    states.getValue(component).value = State.Installed
+                    null
+                } else {
+                    downloadOne(context, component)
+                }
             }
-            downloadOne(context, component)?.let { return it }
+            if (error != null) return error
         }
         return null
     }
@@ -181,6 +201,7 @@ object PaddleModels {
                 val chars = PaddleDecoder.parseCharacterDict(yml.readText())
                 check(chars.isNotEmpty()) { "${component.id}: no character_dict in $YML" }
                 File(staging, DICT).writeText(chars.joinToString("\n"))
+                File(staging, DICT_HASH).writeText(sha256(File(staging, DICT)))
             }
             yml.delete()
             File(staging, INFO).writeText("${component.revision} ${component.onnxSha256}\n")

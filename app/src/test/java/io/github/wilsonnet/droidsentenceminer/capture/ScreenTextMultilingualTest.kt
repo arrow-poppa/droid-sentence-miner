@@ -48,4 +48,12 @@ class ScreenTextMultilingualTest {
         val line = ScreenText.fromRead(listOf(word), listOf(word.box), 1000, 200, area, 0, TextProfile.LATIN).single()
         assertEquals(line.glyphs[0].top, line.glyphs[1].top, 1e-6f) // side by side, not stacked
     }
+    @Test
+    fun missingConfidenceAndOriginalUnicodeAreRetained() {
+        val raw = OcrLine("ﬁne café", BoundingBox(0, 0, 100, 40))
+        val line = ScreenText.fromRead(listOf(raw), listOf(raw.box), 100, 40, area, 0, TextProfile.LATIN).single()
+        assertEquals(raw.text, line.text)
+        org.junit.Assert.assertNull(line.confidence)
+    }
+
 }

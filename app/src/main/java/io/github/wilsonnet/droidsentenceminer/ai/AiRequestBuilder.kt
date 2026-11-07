@@ -1,6 +1,6 @@
 /*
  * Request building ported from ext/js/comm/ai-provider.js (Yomitan BYOK fork, GPL-3.0-or-later,
- * Copyright (C) 2023-2026 Yomitan Authors). Differences are listed in docs/ai-byok.md.
+ * Copyright (C) 2023-2026 Yomitan Authors). Differences are listed in docs/multilingual.md.
  */
 package io.github.wilsonnet.droidsentenceminer.ai
 

@@ -52,4 +52,17 @@ class TextProfileTest {
         assertEquals(0, TextProfile.LATIN.count("Привет"))
         assertEquals(1f, TextProfile.KOREAN.ratio("한국어"), 0f)
     }
+    @Test
+    fun explicitScriptSubtagWinsEvenWithRegion() {
+        assertEquals(TextProfile.LATIN, TextProfile.forLanguage("sr-Latn-RS"))
+        assertEquals(TextProfile.CYRILLIC, TextProfile.forLanguage("sr-Cyrl-RS"))
+        assertEquals(TextProfile.LATIN, TextProfile.forLanguage("sr_Latn_RS"))
+    }
+
+    @Test
+    fun oneLetterWordsAreValidInNonJapaneseProfiles() {
+        org.junit.Assert.assertTrue(TextProfile.LATIN.looksLikeText("I"))
+        org.junit.Assert.assertFalse(TextProfile.JAPANESE.looksLikeText("猫"))
+    }
+
 }

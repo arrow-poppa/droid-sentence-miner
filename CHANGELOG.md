@@ -13,6 +13,9 @@ versions are the `v*` tags that publish a signed APK on
 - Optional BYOK explanations in lookup popups: OpenAI, Gemini, DeepSeek, OpenRouter and custom compatible endpoints, streaming, cancellation, cache and encrypted API keys.
 
 ### Fixed
+- ML Kit overlay coordinates now map back from upscaled recognition images; RTL fragments join in reading order.
+- Dictionary expression probes cover either side of a tap; Anki sentence highlights retain the original inflected surface.
+- PaddleOCR uses the selected text profile independently of its model and verifies model bytes before session loading.
 - Non-Japanese OCR results can appear in the tappable screen layer; lookup and mining use the selected study language.
 - Corrected the ML Kit catalog support-category regression test.
 

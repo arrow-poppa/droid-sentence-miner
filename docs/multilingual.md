@@ -2,7 +2,8 @@
 
 This describes the implementation branch, not a released or device-validated version.
 Builds and unit tests run only in GitHub Actions. Existing Room entities, database version,
-Yomitan archives, Anki mappings, sentence audio and screenshots remain in place.
+Yomitan archives, Anki mappings, sentence audio and screenshots remain in place. Japanese word-audio providers are skipped for
+other study languages. Book photo OCR still uses its existing Japanese ML Kit page pipeline.
 
 ## OCR
 
@@ -19,8 +20,12 @@ Language rows share script recognizers. Mappings to a Cyrillic recognizer in tha
 create a sixth Android ML Kit engine. OCR model and study-language parser are independent.
 Auto selects one configured engine from the language profile; it does not run all models.
 
+ML Kit recognition boxes are remapped to the input crop after upscaling, including symbol boxes.
+Missing confidence remains null. RTL fragments join from right to left.
+
 Paddle weights and provenance are pinned in `ocr/PaddleModels.kt`, matching Chimahon's exact
-reference branch. Models are not bundled in the APK. Approximate character boxes are used when
+reference branch. Models are not bundled in the APK; model and vocabulary hashes are checked before loading sessions,
+and same-component installation/removal is serialized. Approximate character boxes are used when
 only a line box is available; this does not guarantee precise glyph geometry. Android packages
 retain arm64-v8a, armeabi-v7a and x86_64; runtime compatibility on each remains to be tested.
 NCNN and secondary OCR services are not implemented or listed as working engines.

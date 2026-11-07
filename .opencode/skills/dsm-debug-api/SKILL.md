@@ -179,3 +179,9 @@ curl -s "localhost:9099/mine_line?id=42&word=%E8%85%B0"           # card with th
 5. `/ocr?file=` — ML Kit accuracy on a pushed image, plus line boxes.
 6. `/lookup` a known word — dictionary data is live.
 7. `/mine` a word+sentence — inspect the deck in AnkiDroid (deck/model come from prefs).
+
+## Multilingual branch
+
+Lookup, scanning and mining use the configured `studyLanguage` through AppContainer. The
+`/state.screenText[].confidence` value is nullable when the OCR backend supplies no confidence;
+never report it as a measured score of 1. Use a CI APK only; no local Gradle builds.

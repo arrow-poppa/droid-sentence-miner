@@ -53,7 +53,7 @@ object OcrPostProcessor {
         }
 
         val merged = groups.map { group ->
-            val ordered = group.sortedBy { it.box.left }
+            val ordered = if (profile.rightToLeft) group.sortedByDescending { it.box.left } else group.sortedBy { it.box.left }
             val text = joinRow(ordered.map { it.text }, profile)
             val box = ordered.map { it.box }.reduce { acc, box -> acc.union(box) }
             MergedLine(text, box)

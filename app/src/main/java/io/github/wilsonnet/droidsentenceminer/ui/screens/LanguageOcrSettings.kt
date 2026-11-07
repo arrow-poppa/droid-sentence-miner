@@ -238,8 +238,10 @@ private fun PaddleComponentRow(container: AppContainer, component: PaddleCompone
         }
         when (state) {
             PaddleModels.State.Installed -> TextButton(onClick = {
-                container.ocrEngines.releasePaddle()
-                PaddleModels.delete(context, component)
+                scope.launch(kotlinx.coroutines.Dispatchers.IO) {
+                    container.ocrEngines.releasePaddle()
+                    PaddleModels.delete(context, component)
+                }
             }) { Text("Delete") }
             is PaddleModels.State.Downloading -> Unit
             else -> FilledTonalButton(onClick = { scope.launch { PaddleModels.download(context, listOf(component)) } }) { Text("Download") }

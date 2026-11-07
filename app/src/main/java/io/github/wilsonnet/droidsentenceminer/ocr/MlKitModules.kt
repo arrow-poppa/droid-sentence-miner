@@ -48,6 +48,8 @@ object MlKitModules {
             try {
                 val response = ModuleInstall.getClient(context).areModulesAvailable(client).awaitResult()
                 if (response.areModulesAvailable()) State.Installed else State.NotInstalled
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 Log.w(TAG, "availability check failed for ${script.id}", e)
                 State.Unavailable(e.message ?: "Google Play services could not check the model")
@@ -81,6 +83,8 @@ object MlKitModules {
             val response = ModuleInstall.getClient(context).installModules(request).awaitResult()
             if (response.areModulesAlreadyInstalled()) flow.value = State.Installed
             flow.value ?: State.Installing(null)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
         } catch (e: Exception) {
             Log.w(TAG, "install failed for ${script.id}", e)
             State.Unavailable(e.message ?: "Download failed").also { flow.value = it }

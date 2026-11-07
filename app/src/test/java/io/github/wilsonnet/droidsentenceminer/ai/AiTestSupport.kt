@@ -57,7 +57,7 @@ val REQ = AiRequest(target = "running", sentence = "He was running late.", langu
 
 fun testScope() = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
-fun <T> blocking(timeoutMs: Long = 15_000, block: suspend () -> T): T =
+fun <T> blocking(timeoutMs: Long = 15_000, block: suspend CoroutineScope.() -> T): T =
     runBlocking { withTimeout(timeoutMs) { block() } }
 
 fun Flow<AiExplanationState>.collectAll(): List<AiExplanationState> = blocking { toList() }

@@ -261,11 +261,13 @@ class TermLookup internal constructor(
      * else the character alone.
      */
     suspend fun wordAt(text: String, index: Int, language: String = DEFAULT_LANGUAGE): IntRange {
+        if (text.isEmpty()) return 0 until 0
+        val at = index.coerceIn(0, text.lastIndex)
         val code = LanguageParsers.normalizeCode(language)
-        if (code != DEFAULT_LANGUAGE) return multilingual.rangeAt(text, index, code)
-        scan(text).firstOrNull { index >= it.start && index < it.end }?.let { return it.start until it.end }
-        val from = scan(text.substring(index, minOf(text.length, index + MAX_TERM_LENGTH))).firstOrNull { it.start == 0 }
-        return index until index + (from?.text?.length ?: 1)
+        if (code != DEFAULT_LANGUAGE) return multilingual.rangeAt(text, at, code)
+        scan(text).firstOrNull { at >= it.start && at < it.end }?.let { return it.start until it.end }
+        val from = scan(text.substring(at, minOf(text.length, at + MAX_TERM_LENGTH))).firstOrNull { it.start == 0 }
+        return at until at + (from?.text?.length ?: 1)
     }
 
     /**

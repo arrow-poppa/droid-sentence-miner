@@ -3,6 +3,8 @@ package io.github.wilsonnet.droidsentenceminer.ocr
 import android.content.Context
 import io.github.wilsonnet.droidsentenceminer.core.DsmPrefs
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
 
 /** Which engine/model reads the screen, and what text it keeps. Pure data, see [OcrEngineRegistry.resolve]. */
@@ -50,15 +52,26 @@ class OcrEngineRegistry(private val context: Context, private val prefs: DsmPref
      * The engine for the current settings. Throws [OcrUnavailableException] when the chosen engine
      * cannot run yet (PaddleOCR model not downloaded), so callers show why instead of reading nothing.
      */
-    suspend fun engine(twoPass: Boolean, dropNoise: Boolean = true, preferred: String? = null): OcrEngine {
+    suspend fun engine(twoPass: Boolean, dropNoise: Boolean = true, preferred: String? = null): OcrEngine = withContext(Dispatchers.IO) {
         val choice = choice(preferred)
-        return when (choice.engine) {
+        if (choice.engine != DsmPrefs.ENGINE_PADDLE) releasePaddle()
+        when (choice.engine) {
             DsmPrefs.ENGINE_MEIKI -> {
                 MeikiModels.installVariants(context)
                 MeikiOcr.load(MeikiModels.dir(context)) ?: mlKit(MlKitScript.JAPANESE, twoPass, dropNoise, choice.profile)
             }
-            DsmPrefs.ENGINE_PADDLE -> paddle(choice.paddleRecognizer ?: PaddleRecognizer.LATIN, choice.paddleDetector)
-            else -> mlKit(choice.mlKitScript ?: MlKitScript.JAPANESE, twoPass, dropNoise, choice.profile)
+            DsmPrefs.ENGINE_PADDLE -> paddle(choice.paddleRecognizer ?: PaddleRecognizer.LATIN, choice.paddleDetector, choice.profile)
+            else -> {
+                val script = choice.mlKitScript ?: MlKitScript.JAPANESE
+                if (!script.bundled && MlKitModules.stateFlow(script).value != MlKitModules.State.Installed) {
+                    when (val state = MlKitModules.check(context, script)) {
+                        MlKitModules.State.Installed -> Unit
+                        is MlKitModules.State.Unavailable -> throw OcrUnavailableException(state.reason)
+                        else -> throw OcrUnavailableException("Download the ML Kit ${script.label} model in Settings → OCR first")
+                    }
+                }
+                mlKit(script, twoPass, dropNoise, choice.profile)
+            }
         }
     }
 
@@ -72,11 +85,11 @@ class OcrEngineRegistry(private val context: Context, private val prefs: DsmPref
         }
 
     @Synchronized
-    private fun paddle(recognizer: PaddleRecognizer, detector: PaddleComponent): PaddleOcr {
-        paddle?.let { if (it.recognizerModel == recognizer && it.detectorModel == detector) return it }
+    private fun paddle(recognizer: PaddleRecognizer, detector: PaddleComponent, profile: TextProfile): PaddleOcr {
+        paddle?.let { if (it.recognizerModel == recognizer && it.detectorModel == detector && it.profile === profile) return it }
         paddle?.close()
         paddle = null
-        return PaddleOcr.load(context, recognizer, detector).also { paddle = it }
+        return PaddleOcr.load(context, recognizer, detector, profile = profile).also { paddle = it }
     }
 
     /** Frees the PaddleOCR sessions (e.g. after deleting its models). */

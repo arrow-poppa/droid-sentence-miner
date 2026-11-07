@@ -52,7 +52,7 @@ class AiExplanationServiceTest {
 
     // ---- providers over the wire ----
 
-    @Test
+    @Test(timeout = 30_000)
     fun `OpenAI request json and plain response`() {
         val server = srv { enqueue(jsonOk("  An explanation.\n")) }
         val settings = FakeSettings(
@@ -74,7 +74,7 @@ class AiExplanationServiceTest {
         assertTrue(messages[0].jsonObject["content"]!!.jsonPrimitive.content.contains("'running'"))
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `OpenAI streaming sets stream true and returns the joined text`() {
         val server = srv { enqueue(sse(openAiChunk("An "), openAiChunk("expl"), openAiChunk("anation."))) }
         val settings = FakeSettings(testSettings(AiProviderType.OPENAI, server.endpoint(), streaming = true))
@@ -86,7 +86,7 @@ class AiExplanationServiceTest {
         assertEquals("text/event-stream", rec.getHeader("Accept"))
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `streaming emits cumulative partial text progressively`() {
         val server = srv { enqueue(sse(openAiChunk("A"), openAiChunk("B"), openAiChunk("C"))) }
         val partials = mutableListOf<String>()
@@ -99,7 +99,7 @@ class AiExplanationServiceTest {
         assertEquals(listOf("A", "AB", "ABC"), partials)
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `slow streaming is observable as Streaming states before Done`() {
         val body = (1..6).joinToString("") { "data: ${openAiChunk("w$it ")}\n\n" } + "data: [DONE]\n\n"
         val server = srv { enqueue(MockResponse().setHeader("Content-Type", "text/event-stream").setBody(body).throttleBody(40, 60, TimeUnit.MILLISECONDS)) }
@@ -110,7 +110,7 @@ class AiExplanationServiceTest {
         assertTrue(streaming.all { "w1 w2 w3 w4 w5 w6".startsWith(it.text.trim()) })
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `Gemini non-streaming uses the key header and generateContent`() {
         val server = srv {
             enqueue(MockResponse().setHeader("Content-Type", "application/json").setBody("""{"candidates":[{"content":{"parts":[{"text":"hello"}]}}]}"""))
@@ -127,7 +127,7 @@ class AiExplanationServiceTest {
         assertEquals("be brief", body["systemInstruction"]!!.jsonObject["parts"]!!.jsonArray[0].jsonObject["text"]!!.jsonPrimitive.content)
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `Gemini SSE is parsed, thought parts are skipped, chunks arrive progressively`() {
         val chunks = listOf(
             """{"candidates":[{"content":{"parts":[{"text":"thinking...","thought":true}]}}]}""",
@@ -145,7 +145,7 @@ class AiExplanationServiceTest {
         assertEquals(TEST_KEY, rec.getHeader("x-goog-api-key"))
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `Gemini blocked prompt becomes a clear error`() {
         val server = srv {
             enqueue(MockResponse().setHeader("Content-Type", "application/json").setBody("""{"promptFeedback":{"blockReason":"SAFETY"}}"""))
@@ -156,7 +156,7 @@ class AiExplanationServiceTest {
         assertTrue(e.message, e.message.contains("SAFETY"))
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `DeepSeek request carries thinking and reasoning params`() {
         val server = srv { enqueue(jsonOk("ok")) }
         val s = testSettings(
@@ -171,7 +171,7 @@ class AiExplanationServiceTest {
         assertEquals("false", body["stream"]!!.jsonPrimitive.content)
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `OpenRouter request has the provider routing object and attribution headers`() {
         val server = srv { enqueue(jsonOk("ok")) }
         val s = testSettings(
@@ -189,7 +189,7 @@ class AiExplanationServiceTest {
         assertEquals(AiRequestBuilder.APP_TITLE, rec.getHeader("X-OpenRouter-Title"))
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `custom endpoint with custom body and forced streaming`() {
         val server = srv { enqueue(sse(openAiChunk("hi"))) }
         val s = testSettings(
@@ -207,7 +207,7 @@ class AiExplanationServiceTest {
 
     // ---- SSE edge cases over the wire ----
 
-    @Test
+    @Test(timeout = 30_000)
     fun `multi-byte text survives tiny network chunks`() {
         val text = "日本語のテスト🙂です"
         val server = srv {
@@ -217,27 +217,27 @@ class AiExplanationServiceTest {
         assertEquals(done(text), last(states))
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `events after DONE are ignored`() {
         val server = srv { enqueue(sse(openAiChunk("A"), "[DONE]", openAiChunk("B"), done = false)) }
         assertEquals(done("A"), last(service(FakeSettings(testSettings(streaming = true, endpoint = server.endpoint()))).explain(REQ).collectAll()))
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `malformed chunks and keep-alives are skipped`() {
         val body = ": keep-alive\n\ndata: {not json\n\ndata: ${openAiChunk("A")}\n\nevent: ping\ndata: \n\ndata: ${openAiChunk("B")}\n\ndata: [DONE]\n\n"
         val server = srv { enqueue(MockResponse().setHeader("Content-Type", "text/event-stream").setBody(body)) }
         assertEquals(done("AB"), last(service(FakeSettings(testSettings(streaming = true, endpoint = server.endpoint()))).explain(REQ).collectAll()))
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `CRLF streams and an unterminated final event are handled`() {
         val body = "data: ${openAiChunk("A")}\r\n\r\ndata: ${openAiChunk("B")}"
         val server = srv { enqueue(MockResponse().setHeader("Content-Type", "text/event-stream").setBody(body)) }
         assertEquals(done("AB"), last(service(FakeSettings(testSettings(streaming = true, endpoint = server.endpoint()))).explain(REQ).collectAll()))
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `an error object mid-stream becomes an error and is not cached`() {
         val server = srv {
             enqueue(sse(openAiChunk("A"), """{"error":{"message":"overloaded","code":503}}""", done = false))
@@ -252,7 +252,7 @@ class AiExplanationServiceTest {
         assertEquals(done("fine"), last(svc.explain(REQ).collectAll()))
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `a mid-stream error that echoes the key is redacted`() {
         val server = srv { enqueue(sse("""{"error":{"message":"bad key $TEST_KEY for you","code":400}}""", done = false)) }
         val e = error(last(service(FakeSettings(testSettings(streaming = true, endpoint = server.endpoint()))).explain(REQ).collectAll()))
@@ -260,7 +260,7 @@ class AiExplanationServiceTest {
         assertTrue(e.message, e.message.contains("***"))
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `a server that ignores stream and answers JSON is still read, with one request`() {
         val server = srv { enqueue(jsonOk("whole")) }
         val svc = service(FakeSettings(testSettings(streaming = true, endpoint = server.endpoint())))
@@ -268,7 +268,7 @@ class AiExplanationServiceTest {
         assertEquals(1, server.requestCount)
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `provider rejecting stream falls back to one non-streaming request`() {
         val server = srv {
             enqueue(MockResponse().setResponseCode(400).setHeader("Content-Type", "application/json").setBody("""{"error":{"message":"stream not supported"}}"""))
@@ -281,7 +281,7 @@ class AiExplanationServiceTest {
         assertFalse("stream" in server.takeRequest().bodyJson())
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `other errors do not trigger a non-streaming retry`() {
         for (code in listOf(401, 403, 404, 429, 500, 503)) {
             val server = srv { enqueue(MockResponse().setResponseCode(code)); enqueue(jsonOk("should not be used")) }
@@ -293,7 +293,7 @@ class AiExplanationServiceTest {
 
     // ---- errors ----
 
-    @Test
+    @Test(timeout = 30_000)
     fun `status codes map to clear messages without secrets`() {
         data class Case(val code: Int, val kind: AiErrorKind, val retryable: Boolean, val mention: String)
         val cases = listOf(
@@ -321,7 +321,7 @@ class AiExplanationServiceTest {
         }
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `a 400 detail from the provider is shown, with the key redacted`() {
         val server = srv {
             enqueue(MockResponse().setResponseCode(400).setBody("""{"error":{"message":"model 'x' not found (key $TEST_KEY)"}}"""))
@@ -331,7 +331,7 @@ class AiExplanationServiceTest {
         assertFalse(e.message, e.message.contains(TEST_KEY))
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `empty answers are an error`() {
         val plain = srv { enqueue(jsonOk("  ")) }
         assertEquals(AiErrorKind.EMPTY, error(last(service(FakeSettings(testSettings(endpoint = plain.endpoint()))).explain(REQ).collectAll())).kind)
@@ -341,7 +341,7 @@ class AiExplanationServiceTest {
         assertEquals(AiErrorKind.EMPTY, error(last(service(FakeSettings(testSettings(endpoint = noChoices.endpoint()))).explain(REQ).collectAll())).kind)
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `OpenAI-compatible content part arrays and top-level errors are handled`() {
         val parts = srv { enqueue(MockResponse().setHeader("Content-Type", "application/json").setBody("""{"choices":[{"message":{"content":[{"text":"A"},{"content":"B"},"C"]}}]}""")) }
         assertEquals(done("ABC"), last(service(FakeSettings(testSettings(endpoint = parts.endpoint()))).explain(REQ).collectAll()))
@@ -350,7 +350,7 @@ class AiExplanationServiceTest {
         assertEquals(AiErrorKind.SERVER, e.kind)
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `a stalled server times out`() {
         val server = srv { enqueue(MockResponse().setSocketPolicy(SocketPolicy.NO_RESPONSE)) }
         val svc = service(FakeSettings(testSettings(endpoint = server.endpoint())), timeouts = AiTimeouts(connectMs = 500, readMs = 300, overallMs = 2_000))
@@ -359,7 +359,7 @@ class AiExplanationServiceTest {
         assertTrue(e.retryable)
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `the overall call timeout bounds a trickling stream`() {
         val body = (1..200).joinToString("") { "data: ${openAiChunk("x")}\n\n" }
         val server = srv { enqueue(MockResponse().setHeader("Content-Type", "text/event-stream").setBody(body).throttleBody(30, 100, TimeUnit.MILLISECONDS)) }
@@ -370,7 +370,7 @@ class AiExplanationServiceTest {
         assertEquals(AiErrorKind.TIMEOUT, error(last(svc.explain(REQ).collectAll())).kind)
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `an unreachable endpoint is a network error`() {
         val port = srv().port.also { servers.last().shutdown() }
         val e = error(last(service(FakeSettings(testSettings(endpoint = "http://localhost:$port/v1"))).explain(REQ).collectAll()))
@@ -378,7 +378,7 @@ class AiExplanationServiceTest {
         assertTrue(e.retryable)
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `redirects are not followed`() {
         val server = srv {
             enqueue(MockResponse().setResponseCode(302).setHeader("Location", "/other"))
@@ -391,7 +391,7 @@ class AiExplanationServiceTest {
 
     // ---- configuration gates: nothing is sent ----
 
-    @Test
+    @Test(timeout = 30_000)
     fun `nothing is sent when disabled or without key`() {
         val server = srv { enqueue(jsonOk("x")) }
         val ok = testSettings(endpoint = server.endpoint())
@@ -401,7 +401,7 @@ class AiExplanationServiceTest {
         assertEquals(0, server.requestCount)
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `automatic explanation honours the autoExplain setting`() {
         val server = srv { enqueue(jsonOk("auto")) }
         val settings = FakeSettings(testSettings(endpoint = server.endpoint()))
@@ -416,7 +416,7 @@ class AiExplanationServiceTest {
         assertEquals(done("auto", cached = true), last(svc.explain(REQ).collectAll()))
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `http endpoints are rejected except acknowledged loopback or LAN`() {
         val server = srv { enqueue(jsonOk("x")) }
         val publicHttp = service(FakeSettings(testSettings(endpoint = "http://api.example.com/v1/chat/completions")))
@@ -432,7 +432,7 @@ class AiExplanationServiceTest {
         assertEquals(done("x"), last(acked.explain(REQ).collectAll()))
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `invalid custom body json sends nothing`() {
         val server = srv { enqueue(jsonOk("x")) }
         val s = testSettings(endpoint = server.endpoint(), provider = ProviderSettings(requestBodyJson = "{oops"))
@@ -441,7 +441,7 @@ class AiExplanationServiceTest {
         assertEquals(0, server.requestCount)
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `a key with control characters is refused instead of crashing`() {
         val server = srv { enqueue(jsonOk("x")) }
         val e = error(last(service(FakeSettings(testSettings(endpoint = server.endpoint(), key = "abc\ndef"))).explain(REQ).collectAll()))
@@ -452,7 +452,7 @@ class AiExplanationServiceTest {
 
     // ---- cancellation ----
 
-    @Test
+    @Test(timeout = 30_000)
     fun `cancelling the collector cancels the OkHttp call`() {
         val canceled = CountDownLatch(1)
         val client = OkHttpClient.Builder().eventListener(object : EventListener() {
@@ -470,7 +470,7 @@ class AiExplanationServiceTest {
         assertTrue("OkHttp call was not cancelled", canceled.await(5, TimeUnit.SECONDS))
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `cancelled requests are not cached`() {
         val server = srv {
             enqueue(jsonOk("late").setBodyDelay(400, TimeUnit.MILLISECONDS))
@@ -489,7 +489,7 @@ class AiExplanationServiceTest {
 
     // ---- cache ----
 
-    @Test
+    @Test(timeout = 30_000)
     fun `second identical request is served from the cache without a network call`() {
         val server = srv { enqueue(jsonOk("cached text")) }
         val svc = service(FakeSettings(testSettings(endpoint = server.endpoint())))
@@ -499,7 +499,7 @@ class AiExplanationServiceTest {
         assertEquals(done("cached text", cached = true), blocking { svc.cached(REQ) })
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `changing model, prompts, options or the request misses the cache`() {
         val server = srv { repeat(40) { enqueue(jsonOk("r$it")) } }
         val settings = FakeSettings(testSettings(endpoint = server.endpoint()))
@@ -537,7 +537,7 @@ class AiExplanationServiceTest {
         }
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `toggling streaming or the key does not miss the cache`() {
         val server = srv { enqueue(jsonOk("kept")); enqueue(jsonOk("unexpected")) }
         val settings = FakeSettings(testSettings(endpoint = server.endpoint(), streaming = false))
@@ -548,7 +548,7 @@ class AiExplanationServiceTest {
         assertEquals(1, server.requestCount)
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `forceRefresh bypasses the cache and replaces the entry`() {
         val server = srv { enqueue(jsonOk("v1")); enqueue(jsonOk("v2")) }
         val svc = service(FakeSettings(testSettings(endpoint = server.endpoint())))
@@ -558,7 +558,7 @@ class AiExplanationServiceTest {
         assertEquals(2, server.requestCount)
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `the cache is a bounded LRU`() {
         val server = srv { repeat(10) { enqueue(jsonOk("t$it")) } }
         val svc = service(FakeSettings(testSettings(endpoint = server.endpoint())), cacheSize = 2)
@@ -575,7 +575,7 @@ class AiExplanationServiceTest {
         assertEquals(4, server.requestCount)
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `failures are not cached and clearCache empties it`() {
         val server = srv { enqueue(MockResponse().setResponseCode(500)); enqueue(jsonOk("ok")); enqueue(jsonOk("again")) }
         val svc = service(FakeSettings(testSettings(endpoint = server.endpoint())))
@@ -587,7 +587,7 @@ class AiExplanationServiceTest {
 
     // ---- concurrency & stale guard ----
 
-    @Test
+    @Test(timeout = 30_000)
     fun `identical concurrent requests share one in-flight call`() {
         val server = srv { enqueue(jsonOk("shared").setBodyDelay(500, TimeUnit.MILLISECONDS)); enqueue(jsonOk("unexpected")) }
         val svc = service(FakeSettings(testSettings(endpoint = server.endpoint())))
@@ -601,7 +601,7 @@ class AiExplanationServiceTest {
         assertEquals(1, server.requestCount)
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `one collector leaving does not cancel a shared call`() {
         val server = srv { enqueue(jsonOk("shared").setBodyDelay(500, TimeUnit.MILLISECONDS)) }
         val svc = service(FakeSettings(testSettings(endpoint = server.endpoint())))
@@ -617,7 +617,7 @@ class AiExplanationServiceTest {
         assertEquals(1, server.requestCount)
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `forceRefresh supersedes an in-flight call and the old answer never surfaces`() {
         val server = srv {
             enqueue(jsonOk("old").setBodyDelay(700, TimeUnit.MILLISECONDS))
@@ -640,7 +640,7 @@ class AiExplanationServiceTest {
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
-    @Test
+    @Test(timeout = 30_000)
     fun `a newer word never shows the older word's response`() {
         val server = srv {
             enqueue(jsonOk("answer for A").setBodyDelay(600, TimeUnit.MILLISECONDS))
@@ -667,7 +667,7 @@ class AiExplanationServiceTest {
         assertNull(blocking { svc.cached(a) })
     }
 
-    @Test
+    @Test(timeout = 30_000)
     fun `cancelAll stops every in-flight request`() {
         val canceled = CountDownLatch(1)
         val client = OkHttpClient.Builder().eventListener(object : EventListener() {

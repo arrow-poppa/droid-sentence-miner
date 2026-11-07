@@ -4,6 +4,7 @@ import androidx.datastore.preferences.core.PreferenceDataStoreFactory
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -20,7 +21,7 @@ class AiSettingsStoreTest {
 
     @Before fun setUp() { dir = Files.createTempDirectory("ai-store").toFile() }
 
-    @After fun tearDown() { dir.deleteRecursively() }
+    @After fun tearDown() { scope.cancel(); dir.deleteRecursively() }
 
     private fun store() = AiSettingsStore(
         PreferenceDataStoreFactory.create(scope = scope) { File(dir, "ai_settings.preferences_pb") },

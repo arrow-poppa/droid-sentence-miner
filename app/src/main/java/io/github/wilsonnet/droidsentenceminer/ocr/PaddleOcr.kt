@@ -30,6 +30,7 @@ class PaddleOcr private constructor(
     private val chars: List<String>,
     val recognizerModel: PaddleRecognizer,
     val detectorModel: PaddleComponent,
+    val profile: TextProfile,
     private val options: PaddleDecoder.DetOptions,
 ) : OcrEngine, Closeable {
 
@@ -47,7 +48,6 @@ class PaddleOcr private constructor(
     override suspend fun recognize(bitmap: Bitmap): OcrResult = withContext(Dispatchers.Default) {
         var lines: List<OcrLine> = emptyList()
         val elapsed = measureTimeMillis { lines = synchronized(this@PaddleOcr) { run(bitmap) } }
-        val profile = recognizerModel.profile
         val text = OcrPostProcessor.toSentenceText(OcrPostProcessor.merge(lines, profile = profile), profile)
         OcrResult(text = text, lines = lines, elapsedMs = elapsed)
     }
@@ -137,27 +137,29 @@ class PaddleOcr private constructor(
             recognizer: PaddleRecognizer,
             detector: PaddleComponent = PaddleComponent.DET_TINY,
             threads: Int = 3,
+            profile: TextProfile = recognizer.profile,
         ): PaddleOcr {
-            val missing = listOf(detector, recognizer.component).filterNot { PaddleModels.installed(context, it) }
+            val missing = listOf(detector, recognizer.component).filterNot { PaddleModels.verified(context, it) }
             if (missing.isNotEmpty()) {
                 throw OcrUnavailableException("PaddleOCR needs ${missing.joinToString { it.label }} — download it in Settings → OCR")
             }
             val env = OrtEnvironment.getEnvironment()
-            val opts = OrtSession.SessionOptions().apply {
-                setIntraOpNumThreads(threads)
-                addConfigEntry("session.intra_op.allow_spinning", "0")
-            }
-            val started = System.currentTimeMillis()
-            val det = env.createSession(PaddleModels.modelFile(context, detector).absolutePath, opts)
-            val rec = try {
-                env.createSession(PaddleModels.modelFile(context, recognizer.component).absolutePath, opts)
-            } catch (e: Exception) {
-                det.close()
-                throw e
-            }
             val chars = PaddleModels.dictFile(context, recognizer.component).readLines()
-            Log.i(TAG, "loaded ${detector.id}+${recognizer.id} (${chars.size} chars) in ${System.currentTimeMillis() - started} ms")
-            return PaddleOcr(env, det, rec, chars, recognizer, detector, PaddleDecoder.DetOptions())
+            check(chars.isNotEmpty()) { "PaddleOCR character dictionary is empty" }
+            val started = System.currentTimeMillis()
+            return OrtSession.SessionOptions().use { opts ->
+                opts.setIntraOpNumThreads(threads)
+                opts.addConfigEntry("session.intra_op.allow_spinning", "0")
+                val det = env.createSession(PaddleModels.modelFile(context, detector).absolutePath, opts)
+                try {
+                    val rec = env.createSession(PaddleModels.modelFile(context, recognizer.component).absolutePath, opts)
+                    Log.i(TAG, "loaded ${detector.id}+${recognizer.id} (${chars.size} chars) in ${System.currentTimeMillis() - started} ms")
+                    PaddleOcr(env, det, rec, chars, recognizer, detector, profile, PaddleDecoder.DetOptions())
+                } catch (e: Exception) {
+                    det.close()
+                    throw e
+                }
+            }
         }
     }
 }

@@ -47,4 +47,13 @@ class MultilingualPostProcessorTest {
         )
         assertEquals(listOf("The quick brown fox"), SubtitleLineFilter.filter(rows, TextProfile.LATIN).map { it.text })
     }
+    @Test
+    fun arabicFragmentsJoinInLogicalReadingOrder() {
+        val merged = OcrPostProcessor.merge(
+            listOf(line("بالعالم", 0, 0, 100, 40), line("مرحبا", 110, 0, 200, 40)),
+            profile = TextProfile.ARABIC,
+        )
+        assertEquals("مرحبا بالعالم", merged.single().text)
+    }
+
 }

@@ -81,4 +81,13 @@ class WordSpansTest {
         assertEquals("went", candidates[1].text)
         assertTrue(candidates.indexOfFirst { it.text == "go" } > 1)
     }
+    @Test
+    fun `span window includes expressions to the right of a tap with a long prefix`() {
+        val text = "one two three four five six seven eight nine"
+        val tokens = WordSpans.tokenize(text, false)
+        val spans = WordSpans.spansContaining(text, tokens, 4)
+        assertTrue(spans.any { it.probe == "five six seven eight nine" })
+        assertTrue(spans.any { it.probe == "one two three four five" })
+    }
+
 }

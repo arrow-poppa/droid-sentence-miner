@@ -297,8 +297,8 @@ class MultilingualLookupTest {
 
     @Test
     fun `German and Korean deinflect and other languages select whole words`() {
-        val de = lookup(store(Row(1, "gehen", rules = "v"), Row(1, "Haus", rules = "n")))
-        assertEquals("gehen", de.details("gegangen", "de").terms.firstOrNull()?.expression ?: "gehen")
+        val de = lookup(store(Row(1, "machen", rules = "v"), Row(1, "Haus", rules = "n")))
+        assertEquals("machen", de.details("gemacht", "de").terms.first().expression)
         assertEquals("Haus", de.details("haus", "de").terms.first().expression)
         val ko = lookup(store(Row(1, "먹다", rules = "v")))
         val text = "밥을 먹었다 어제"
@@ -342,7 +342,7 @@ class MultilingualLookupTest {
         assertEquals("ja-yomitan", selection.analyzer)
         assertTrue(selection.candidates.any { it.text == "食べる" })
         // An unknown code (or blank) must not switch the Japanese path off by accident.
-        assertFalse(runBlocking { l.lookup("食べました", language = "") }.terms.isEmpty().not().not())
+        assertTrue(runBlocking { l.lookup("食べました", language = "") }.terms.isNotEmpty())
     }
 
     @Test
@@ -357,4 +357,23 @@ class MultilingualLookupTest {
         l.details("jumping", "en")
         assertEquals(1, s.hasRulesQueries)
     }
+    @Test
+    fun `dictionary invalidation also clears POS availability for a same-size replacement`() {
+        val s = store(Row(1, "run"))
+        val l = lookup(s)
+        assertEquals("run", l.details("running", "en").baseForm)
+        assertEquals(1, s.hasRulesQueries)
+        l.invalidateCaches()
+        assertEquals("run", l.details("running", "en").baseForm)
+        assertEquals(2, s.hasRulesQueries)
+    }
+
+    @Test
+    fun `empty and out-of-range taps return valid original offsets`() {
+        val l = lookup(store())
+        assertEquals(0 until 0, runBlocking { l.wordAt("", 0) })
+        assertEquals(0 until 1, runBlocking { l.wordAt("猫", 100) })
+        assertEquals("world", l.select("world", 100, "en").surface)
+    }
+
 }

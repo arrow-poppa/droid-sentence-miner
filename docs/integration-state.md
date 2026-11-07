@@ -41,6 +41,8 @@ The prior Claude session reached its usage limit; do not assume an active review
 - M5 recovered from `007af79` plus uncommitted UI/tests in the AI worktree; integrated native
   settings and popup explanation section. Remote calls remain opt-in.
 - Application scan/tap/lookup/mining entry points now pass `studyLanguage`.
+- Integration `9eafb28` compiled the app APK in CI run `42418120327` but test compilation failed
+  because the recovered AI test helper lacked a CoroutineScope receiver; corrected in the follow-up.
 - Combined CI validation pending. See [multilingual.md](multilingual.md) for capabilities and gaps.
 - M6 optional backends and NCNN remain unimplemented and absent from the engine picker.
 

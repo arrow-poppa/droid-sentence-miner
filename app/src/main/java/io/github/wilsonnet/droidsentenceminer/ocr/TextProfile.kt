@@ -65,7 +65,7 @@ class TextProfile private constructor(
 
     /** Auto OCR's "is this a line of text in the study language" gate. */
     fun looksLikeText(text: String): Boolean =
-        if (isJapanese) count(text) >= 2 && score(text) >= 3.0 else count(text) >= 2 && score(text) >= 5.0
+        if (isJapanese) count(text) >= 2 && score(text) >= 3.0 else count(text) >= 1 && score(text) >= 5.0
 
     /** Share of letters/digits that belong to this profile (0..1). */
     fun ratio(text: String): Float {
@@ -100,7 +100,16 @@ class TextProfile private constructor(
 
         /** The profile for a BCP-47 study-language code (base subtag decides; unknown → Latin). */
         fun forLanguage(code: String): TextProfile {
-            val base = code.lowercase().substringBefore('-').substringBefore('_')
+            val subtags = code.lowercase().replace('_', '-').split('-')
+            val base = subtags.first()
+            val explicitScript = subtags.drop(1).firstOrNull { it.length == 4 }
+            when (explicitScript) {
+                "latn" -> return LATIN
+                "cyrl" -> return CYRILLIC
+                "arab" -> return ARABIC
+                "deva" -> return DEVANAGARI
+                "hebr" -> return HEBREW
+            }
             return when {
                 base == "ja" -> JAPANESE
                 base == "zh" || base == "yue" || base == "lzh" -> CHINESE
@@ -108,7 +117,7 @@ class TextProfile private constructor(
                 base == "el" -> GREEK
                 base == "th" -> THAI
                 base == "he" || base == "yi" -> HEBREW
-                code.lowercase().endsWith("-cyrl") || base in CYRILLIC_LANGS && !code.lowercase().endsWith("-latn") -> CYRILLIC
+                base in CYRILLIC_LANGS -> CYRILLIC
                 base in ARABIC_LANGS -> ARABIC
                 base in DEVANAGARI_LANGS -> DEVANAGARI
                 else -> LATIN

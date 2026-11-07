@@ -20,8 +20,8 @@ data class ScreenTextLine(
     val glyphs: List<FracRect>,
     /** Index of the auto OCR text area it was read from. */
     val area: Int,
-    /** The engine's mean character confidence (1 when it reports none). */
-    val confidence: Float = 1f,
+    /** The engine's reported confidence, or null when unavailable. */
+    val confidence: Float? = null,
 ) {
     val bounds: FracRect get() = glyphs.reduce(FracRect::union)
 }
@@ -57,7 +57,7 @@ object ScreenText {
         // The detector sometimes returns a second, garbled box over the same line: keep the surer one.
         val distinct = raw.filterNot { line ->
             raw.any { other ->
-                other !== line && (other.confidence ?: 1f) > (line.confidence ?: 1f) && overlap(line.box, other.box) > 0.5f
+                other !== line && other.confidence != null && line.confidence != null && other.confidence > line.confidence && overlap(line.box, other.box) > 0.5f
             }
         }
         return distinct.mapNotNull { line ->
@@ -65,13 +65,13 @@ object ScreenText {
                 line.box.centerX >= k.left && line.box.centerX <= k.right && line.box.centerY >= k.top && line.box.centerY <= k.bottom
             }
             if (!inKept) return@mapNotNull null
-            val text = if (profile.isJapanese) PageLayout.clean(line.text) else OcrPostProcessor.normalize(line.text, profile)
+            val text = if (profile.isJapanese) PageLayout.clean(line.text) else line.text.trim()
             if (text.isEmpty() || text.none(profile::isTarget)) return@mapNotNull null
             val vertical = profile.allowsVertical && line.box.height > line.box.width * 1.3f && text.length >= 2
             var glyphs = PageLayout.glyphsOf(line, text, vertical)
             // Evenly split boxes run left to right; an RTL line's first (logical) character is drawn rightmost.
             if (profile.rightToLeft && line.chars?.size != text.length) glyphs = glyphs.reversed()
-            ScreenTextLine(text, glyphs.map(::frac), areaIndex, line.confidence ?: 1f)
+            ScreenTextLine(text, glyphs.map(::frac), areaIndex, line.confidence)
         }.sortedWith(compareBy({ it.area }, { it.bounds.top }, { it.bounds.left }))
     }
 
