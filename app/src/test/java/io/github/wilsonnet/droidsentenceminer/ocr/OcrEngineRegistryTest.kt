@@ -61,4 +61,11 @@ class OcrEngineRegistryTest {
         assertEquals(PaddleComponent.DET_SMALL, resolve(DsmPrefs.ENGINE_PADDLE, "en", det = "det_small").paddleDetector)
         assertEquals(PaddleComponent.DET_TINY, resolve(DsmPrefs.ENGINE_PADDLE, "en", det = "rec_tiny").paddleDetector)
     }
+    @Test
+    fun unavailableOfficialMappingIsExplainedWithoutInventingAModel() {
+        val choice = resolve(DsmPrefs.ENGINE_AUTO, "tk")
+        assertEquals(MlKitScript.LATIN, choice.mlKitScript)
+        assertNotNull(choice.warning)
+    }
+
 }

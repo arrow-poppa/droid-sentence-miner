@@ -56,8 +56,11 @@ class OcrEngineRegistry(private val context: Context, private val prefs: DsmPref
      */
     suspend fun engine(twoPass: Boolean, dropNoise: Boolean = true, preferred: String? = null): OcrEngine = withContext(Dispatchers.IO) {
         val choice = choice(preferred)
-        if (choice.engine != DsmPrefs.ENGINE_PADDLE) releasePaddle()
-        if (choice.engine != DsmPrefs.ENGINE_MEIKI) MeikiOcr.unload()
+        // Diagnostic overrides must not close the engine retained by the live OCR loop.
+        if (preferred == null) {
+            if (choice.engine != DsmPrefs.ENGINE_PADDLE) releasePaddle()
+            if (choice.engine != DsmPrefs.ENGINE_MEIKI) MeikiOcr.unload()
+        }
         when (choice.engine) {
             DsmPrefs.ENGINE_MEIKI -> {
                 MeikiModels.installVariants(context)
@@ -122,7 +125,8 @@ class OcrEngineRegistry(private val context: Context, private val prefs: DsmPref
             val detector = PaddleComponent.fromId(paddleDetector)?.takeIf { it.isDetector } ?: PaddleComponent.DET_TINY
             val mlScript = MlKitScript.fromId(mlKitScript) ?: MlKitScript.forLanguage(language)
             val paddleRec = PaddleRecognizer.fromId(paddleRecognizer) ?: PaddleRecognizer.forLanguage(language)
-            val mlKitReads = MlKitLanguageCatalog.find(language)?.recognizer != null ||
+            val catalog = MlKitLanguageCatalog.find(language)
+            val mlKitReads = if (catalog != null) catalog.recognizer != null else
                 profile in setOf(TextProfile.JAPANESE, TextProfile.CHINESE, TextProfile.KOREAN, TextProfile.DEVANAGARI, TextProfile.LATIN)
             fun mlKit(warning: String? = null) = OcrChoice(DsmPrefs.ENGINE_MLKIT, mlKitScript = mlScript, profile = profile, warning = warning)
             fun paddle(warning: String? = null) = OcrChoice(DsmPrefs.ENGINE_PADDLE, paddleRecognizer = paddleRec, paddleDetector = detector, profile = profile, warning = warning)
@@ -132,7 +136,7 @@ class OcrEngineRegistry(private val context: Context, private val prefs: DsmPref
                 profile == TextProfile.CYRILLIC || profile == TextProfile.ARABIC || profile == TextProfile.GREEK -> paddle()
                 profile == TextProfile.THAI || profile == TextProfile.HEBREW ->
                     paddle("No pinned OCR model reads this script yet; PaddleOCR ${paddleRec.id} will read only Latin text")
-                else -> mlKit()
+                else -> mlKit(if (mlKitReads) null else "The official language mapping has no Android ML Kit recognizer; this uses the Latin script model")
             }
             return when (engine) {
                 DsmPrefs.ENGINE_MEIKI -> if (profile.isJapanese) {

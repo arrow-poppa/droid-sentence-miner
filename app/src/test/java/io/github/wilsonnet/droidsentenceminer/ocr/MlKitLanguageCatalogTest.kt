@@ -39,7 +39,9 @@ class MlKitLanguageCatalogTest {
         assertEquals("fil", MlKitLanguageCatalog.find("tl")?.code)
         assertEquals("sr-Latn", MlKitLanguageCatalog.find("sr-Latn-RS")?.code)
         assertEquals("pt", MlKitLanguageCatalog.find(" PT_br ")?.code)
-        assertEquals(TextProfile.CYRILLIC, TextProfile.forLanguage("tk"))
+        assertEquals(TextProfile.CYRILLIC, TextProfile.forLanguage("os"))
+        // Google's Turkmen row says Latn while mapping to an unavailable Cyrillic model.
+        assertEquals(TextProfile.LATIN, TextProfile.forLanguage("tk"))
     }
 
 }

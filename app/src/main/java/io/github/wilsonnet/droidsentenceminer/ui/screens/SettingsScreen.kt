@@ -338,8 +338,8 @@ fun SettingsScreen(modifier: Modifier = Modifier, onOpen: (String) -> Unit = {})
                 }
                 SettingSwitch(
                     title = "Word audio",
-                    description = "Add the word's pronunciation to the card like Yomitan: JapanesePod101, then " +
-                        "JapanesePod101 search, then Jisho. Needs internet when mining.",
+                    description = "Japanese uses JapanesePod101 and Jisho; other study languages use only your custom audio URL. " +
+                        "Needs internet when mining.",
                     checked = wordAudio,
                 ) { value -> scope.launch { container.prefs.setWordAudio(value) } }
                 if (wordAudio) {

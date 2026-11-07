@@ -13,6 +13,8 @@ versions are the `v*` tags that publish a signed APK on
 - Optional BYOK explanations in lookup popups: OpenAI, Gemini, DeepSeek, OpenRouter and custom compatible endpoints, streaming, cancellation, cache and encrypted API keys.
 
 ### Fixed
+- Auto OCR reloads language/engine changes during an active session and reports recognition failures.
+- Custom word-audio URLs remain available for non-Japanese study; Japanese providers receive only Japanese study lookups.
 - Unknown-word taps in text views and recursive definition lookups use language-aware whole-word selection.
 - AI configuration opens correctly when the app is already running; streaming fallback respects the streaming toggle and hides echoed authorization headers.
 - ML Kit overlay coordinates now map back from upscaled recognition images; RTL fragments join in reading order.

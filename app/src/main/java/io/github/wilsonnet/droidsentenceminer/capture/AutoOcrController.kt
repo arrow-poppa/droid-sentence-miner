@@ -76,7 +76,9 @@ class AutoOcrController(
         _status.value = Status(running = true)
         job = scope.launch(Dispatchers.Default) {
             try {
-                loop()
+                while (currentCoroutineContext().isActive && loop()) {
+                    // A configuration change restarts with fresh inference and tracking state.
+                }
             } finally {
                 withContext(NonCancellable) { closeOpenLine(System.currentTimeMillis()) }
                 _status.value = _status.value.copy(running = false)
@@ -91,16 +93,25 @@ class AutoOcrController(
         textLog.openLinePausedAtMs = null
     }
 
-    private suspend fun loop() {
+    private suspend fun settingsKey(): List<String> = listOf(
+        prefs.studyLanguage.first(), prefs.ocrEngine.first(), prefs.ocrMlKitScript.first(),
+        prefs.ocrPaddleRecognizer.first(), prefs.ocrPaddleDetector.first(), prefs.ocrDropNoise.first().toString(),
+    )
+
+    /** True requests a clean restart after a settings change; false means the engine cannot run. */
+    private suspend fun loop(): Boolean {
+        val settings = settingsKey()
         val dropNoise = prefs.ocrDropNoise.first()
         // meikiocr is accurate in one pass; ML Kit gets a fast pass here and a two-pass re-read below.
         val profile = container.textProfile()
         // An engine that can't run (model not downloaded) stops auto OCR with the reason, not silently.
         val fast = try {
             container.ocrEngine(twoPass = false, dropNoise = dropNoise)
-        } catch (e: OcrUnavailableException) {
-            _status.value = _status.value.copy(error = e.message)
-            return
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            _status.value = _status.value.copy(error = e.message ?: "OCR engine could not initialize")
+            return false
         }
         val tracker = TextLineTracker()
         var lastSignature: IntArray? = null
@@ -110,6 +121,12 @@ class AutoOcrController(
 
         while (currentCoroutineContext().isActive) {
             val loopStart = System.currentTimeMillis()
+            if (settingsKey() != settings) {
+                closeOpenLine(loopStart)
+                _screenText.value = emptyList()
+                return true
+            }
+            var readError: String? = null
             val interval = prefs.autoOcrIntervalMs.first().toLong().coerceIn(150, 5_000)
             if (!capture.isReady) {
                 _status.value = _status.value.copy(error = "Screen capture stopped")
@@ -161,18 +178,26 @@ class AutoOcrController(
                     lastCrops = crops
                     val ocrStart = System.currentTimeMillis()
                     val reads = crops.mapIndexed { i, crop ->
-                        runCatching { dialogueRead(fast, crop, dropNoise, selected[i], i, profile) }.getOrElse { "" to emptyList() }
+                        try {
+                            dialogueRead(fast, crop, dropNoise, selected[i], i, profile)
+                        } catch (e: kotlinx.coroutines.CancellationException) {
+                            throw e
+                        } catch (e: Exception) {
+                            readError = e.message ?: "OCR recognition failed"
+                            "" to emptyList()
+                        }
                     }
                     _status.value = _status.value.copy(
                         ocrRuns = _status.value.ocrRuns + 1,
                         ocrMs = _status.value.ocrMs + System.currentTimeMillis() - ocrStart,
                     )
+                    if (readError != null) lastSignature = null // retry transient failures even on a static frame
                     val raw = reads.joinToString("\n") { it.first }.trim()
                     val isText = profile.looksLikeText(raw)
                     _screenText.value = if (isText) reads.flatMap { it.second } else emptyList()
                     if (isText) raw else ""
                 }
-                _status.value = _status.value.copy(reads = _status.value.reads + 1, lastRead = text, lastReadMs = atMs, error = null)
+                _status.value = _status.value.copy(reads = _status.value.reads + 1, lastRead = text, lastReadMs = atMs, error = readError)
             }
             lastRead = text
 
@@ -198,6 +223,7 @@ class AutoOcrController(
             val elapsed = System.currentTimeMillis() - loopStart
             delay((interval - elapsed).coerceAtLeast(30))
         }
+        return false
     }
 
     /** Re-reads a stable line with the user's OCR settings; keeps the fast read if worse. Stored joined. */

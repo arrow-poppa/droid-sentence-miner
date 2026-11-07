@@ -3,7 +3,7 @@
 This describes the implementation branch, not a released or device-validated version.
 Builds and unit tests run only in GitHub Actions. Existing Room entities, database version,
 Yomitan archives, Anki mappings, sentence audio and screenshots remain in place. Japanese word-audio providers are skipped for
-other study languages. Book photo OCR still uses its existing Japanese ML Kit page pipeline.
+other study languages, which can still use a custom audio URL. Book photo OCR still uses its existing Japanese ML Kit page pipeline.
 
 ## OCR
 
@@ -19,6 +19,8 @@ The ML Kit catalog represents 37 supported, 16 experimental and 122 mapped rows 
 Language rows share script recognizers. Mappings to a Cyrillic recognizer in that page do not
 create a sixth Android ML Kit engine. OCR model and study-language parser are independent.
 Auto selects one configured engine from the language profile; it does not run all models.
+Changing study language, engine, script/model or noise filtering resets the active auto-OCR
+engine/tracker on its next poll. Initialization and recognition failures remain visible in status.
 
 ML Kit recognition boxes are remapped to the input crop after upscaling, including symbol boxes.
 Missing confidence remains null. RTL fragments join from right to left.

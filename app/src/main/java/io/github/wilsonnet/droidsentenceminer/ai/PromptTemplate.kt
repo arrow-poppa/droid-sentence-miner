@@ -25,7 +25,13 @@ object PromptTemplate {
      * known, is appended as a separate explicit note and never substituted into the prompt.
      */
     fun user(settings: AiSettings, request: AiRequest): String {
-        val body = render(settings.userPrompt, request)
+        val language = request.language?.trim().orEmpty()
+        val languageNote = if (language.isNotEmpty() && "{{language}}" !in settings.userPrompt && "{{language}}" !in settings.systemPrompt) {
+            "\n\nStudy language: $language."
+        } else {
+            ""
+        }
+        val body = render(settings.userPrompt, request) + languageNote
         val headword = request.headword?.trim().orEmpty()
         val reading = request.reading?.trim().orEmpty()
         if (headword.isEmpty() && reading.isEmpty()) return body

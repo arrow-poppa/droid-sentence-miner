@@ -24,14 +24,16 @@ class WordAudio(private val client: OkHttpClient = defaultClient) {
      * The first valid clip from the sources in Yomitan's order. Gives up after [budgetMs] in total:
      * a word with no audio anywhere tries every source, and a slow site held the card for 15+ s.
      */
-    suspend fun fetch(term: String, reading: String, customUrl: String? = null, budgetMs: Long = BUDGET_MS): Clip? = withContext(Dispatchers.IO) {
+    suspend fun fetch(term: String, reading: String, customUrl: String? = null, budgetMs: Long = BUDGET_MS, japaneseSources: Boolean = true): Clip? = withContext(Dispatchers.IO) {
         val deadline = android.os.SystemClock.elapsedRealtime() + budgetMs
         val read = reading.ifBlank { term }
         val attempts = buildList<Pair<String, () -> List<String>>> {
             customUrl?.takeIf { it.isNotBlank() }?.let { template -> add("custom" to { listOf(WordAudioSources.customUrl(template, term, read)) }) }
-            add("jpod101" to { listOf(WordAudioSources.jpod101Url(term, read)) })
-            add("languagepod101" to { languagePod101(term, read) })
-            add("jisho" to { jisho(term, read) })
+            if (japaneseSources) {
+                add("jpod101" to { listOf(WordAudioSources.jpod101Url(term, read)) })
+                add("languagepod101" to { languagePod101(term, read) })
+                add("jisho" to { jisho(term, read) })
+            }
         }
         for ((source, urls) in attempts) {
             if (android.os.SystemClock.elapsedRealtime() > deadline) break

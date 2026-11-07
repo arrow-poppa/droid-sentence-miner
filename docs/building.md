@@ -19,7 +19,8 @@ adb -s <serial> install -r /tmp/dsm-apk/app-debug.apk
 ```
 
 The CI runner uses JDK 21 and runs `./gradlew testDebugUnitTest assembleDebug --console=plain --continue`.
-Test evidence belongs in [validation.md](validation.md); device instrumentation remains separate
+The integration currently has 385 executed tests in its last completed run (2 failures under repair).
+Final test evidence belongs in [validation.md](validation.md); device instrumentation remains separate
 and must not uninstall a personal dictionary collection.
 
 Debug builds are labelled "Droid Sentence Miner (Dev)", have a localhost debug API for driving the app over adb (see [`.opencode/skills/dsm-debug-api`](../.opencode/skills/dsm-debug-api/SKILL.md)) and are signed with the committed `app/debug.keystore`, so they upgrade each other in place. Release builds come from the [release workflow](../.github/workflows/release.yml) on a `v*` tag.

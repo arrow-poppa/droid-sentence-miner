@@ -18,7 +18,8 @@ Never compile locally: use the GitHub CI APK (see `docs/building.md`). Desktop P
 verify the model contract only, not Android accuracy, geometry or performance. ML Kit boxes must
 map from the upscaled bitmap back to the input crop (`OcrGeometry`); test symbol boxes separately.
 Use the same crops with the selected study-language profile, preserve absent confidence as null,
-and measure RTL order and approximate glyph geometry independently. Current status/matrix:
+and measure RTL order and approximate glyph geometry independently. During live tests, switch
+study language/engine and verify that AutoOcrController restarts its tracker on the next poll. Current status/matrix:
 `docs/multilingual.md` and `docs/integration-state.md`.
 
 ## Data sets

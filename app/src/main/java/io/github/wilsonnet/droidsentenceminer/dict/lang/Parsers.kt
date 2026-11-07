@@ -200,8 +200,13 @@ internal object Parsers {
             }
     }
 
-    private fun germanVariants(text: String): List<Form> =
-        GermanTextPreprocessors.allVariants(text).map { Form(it) }
+    private fun germanVariants(text: String): List<Form> {
+        val variants = GermanTextPreprocessors.allVariants(text)
+        // German dictionary nouns are capitalized even when OCR/the selection is lower case.
+        // This remains a candidate; an actual dictionary entry must validate it.
+        return (variants + variants.map { it.replaceFirstChar { ch -> ch.titlecase(java.util.Locale.GERMAN) } })
+            .distinct().map { Form(it) }
+    }
 
     private fun elisionForms(code: String, text: String): List<Form> {
         val stem = Elision.strip(code, text) ?: return emptyList()

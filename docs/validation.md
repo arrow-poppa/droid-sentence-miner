@@ -6,7 +6,14 @@
 
 Multilingual continuation: the previous OCR CI run [42410311434](https://github.com/arrow-poppa/droid-sentence-miner/actions/runs/42410311434) compiled the APK and ran 239 tests with one catalog-count failure. Integration `9eafb28` compiled the app but exposed a coroutine-scope test-helper compilation error.
 Follow-up `259b1d5` ([run 42418618474](https://github.com/arrow-poppa/droid-sentence-miner/actions/runs/42418618474))
-ran 375 tests, 3 failed; fixes are awaiting the next CI. no local compilation or Android runtime benchmarks have been run in this continuation.
+ran 375 tests, 3 failed. Commit `7e115e3` ([run 42419319306](https://github.com/arrow-poppa/droid-sentence-miner/actions/runs/42419319306))
+compiled the APK and ran 385 tests, 2 failed (German noun capitalization, incorrect test expectation
+for the official Turkmen mapping). Final fixes await CI. No local compilation or Android runtime
+benchmarks have been run in this continuation.
+
+A lightweight check of the already-downloaded pinned Paddle YAML files compared the Kotlin parser's
+scalar rules with PyYAML: all six recognizer vocabularies matched (6,904; 18,708; 850; 747;
+354; 11,945 entries). This checked vocabulary parsing only; it did not run inference or compilation.
 
 What was measured, on which device, and how. Recipes and scripts: [`.opencode/skills/dsm-ocr-eval`](../.opencode/skills/dsm-ocr-eval/SKILL.md), [`dsm-audio`](../.opencode/skills/dsm-audio/SKILL.md), [`dsm-debug-api`](../.opencode/skills/dsm-debug-api/SKILL.md), `tools/`.
 

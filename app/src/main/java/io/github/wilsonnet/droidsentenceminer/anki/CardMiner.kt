@@ -147,11 +147,11 @@ class CardMiner(
     /** The word's pronunciation for the card (null when turned off or not found in time). */
     private suspend fun fetchWordAudio(word: String, details: TermLookup.LookupDetails): WordAudio.Clip? {
         if (!prefs.wordAudio.first()) return null
-        // The built-in pronunciation sources are Japanese; never send other study text to them.
-        if (io.github.wilsonnet.droidsentenceminer.dict.lang.LanguageParsers.normalizeCode(prefs.studyLanguage.first()) != "ja") return null
+        // Other study languages can use a custom source without contacting Japanese providers.
+        val japanese = io.github.wilsonnet.droidsentenceminer.dict.lang.LanguageParsers.normalizeCode(prefs.studyLanguage.first()) == "ja"
         val t0 = android.os.SystemClock.elapsedRealtime()
         val expression = details.baseForm.ifBlank { word }
-        return wordAudioFetcher.fetch(expression, details.reading.orEmpty(), prefs.wordAudioCustomUrl.first()).also {
+        return wordAudioFetcher.fetch(expression, details.reading.orEmpty(), prefs.wordAudioCustomUrl.first(), japaneseSources = japanese).also {
             android.util.Log.i(TAG, "「$expression」: word audio fetch ${android.os.SystemClock.elapsedRealtime() - t0} ms (${it?.source})")
         }
     }

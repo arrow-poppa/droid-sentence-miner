@@ -337,4 +337,10 @@ class AiRequestBuilderTest {
         // defaults fill the gaps for the hosted providers
         assertTrue(AiConfigCheck.isConfigured(openai().withProvider { it.copy(model = "", endpoint = "") }))
     }
+    @Test
+    fun `study language is included when the prompts do not interpolate it`() {
+        val user = messages(build(openai(), REQ))[0]["content"]!!.jsonPrimitive.content
+        assertTrue(user.contains("Study language: en."))
+    }
+
 }
