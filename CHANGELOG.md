@@ -13,6 +13,7 @@ versions are the `v*` tags that publish a signed APK on
 - Optional BYOK explanations in lookup popups: OpenAI, Gemini, DeepSeek, OpenRouter and custom compatible endpoints, streaming, cancellation, cache and encrypted API keys.
 
 ### Fixed
+- Wrapped sentences in space-delimited languages retain word boundaries in the text log and shared-text mining.
 - Auto OCR reloads language/engine changes during an active session and reports recognition failures.
 - Custom word-audio URLs remain available for non-Japanese study; Japanese providers receive only Japanese study lookups.
 - Unknown-word taps in text views and recursive definition lookups use language-aware whole-word selection.

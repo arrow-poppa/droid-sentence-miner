@@ -50,6 +50,8 @@ A generated candidate becomes a lemma only after a dictionary match. POS-less di
 accept deinflections only when the dictionary has no POS rules anywhere; tagged dictionaries
 keep grammatical filtering. Compound selection must cover the tap and match a dictionary.
 Dictionary writes invalidate caches, including POS availability after same-size reimports.
+Text logging joins wrapped rows with spaces for space-delimited profiles; Japanese retains its
+existing wrap-joining behavior.
 
 ## BYOK explanations
 

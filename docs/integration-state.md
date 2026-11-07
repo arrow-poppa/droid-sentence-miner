@@ -33,26 +33,21 @@ The prior Claude session reached its usage limit; do not assume an active review
 
 ## Status
 
-- CI baseline: `0a66b24`, success. OCR commit `a76627d`: APK compiled, 239 tests, 1 failed
-  (`MlKitLanguageCatalogTest`: expected support counts were wrong; catalog has 37/16/122).
-- M1–M3 code present: text profiles, five ML Kit scripts, PaddleOCR ONNX/model manager and settings.
-  Physical Android recognition and geometry are **not verified** by desktop model tests.
-- M4 recovered from the parser worktree: language parsers and fake-store behavioral tests.
-- M5 recovered from `007af79` plus uncommitted UI/tests in the AI worktree; integrated native
-  settings and popup explanation section. Remote calls remain opt-in.
-- Application scan/tap/lookup/mining entry points now pass `studyLanguage`.
-- Integration `9eafb28` compiled the app APK in CI run `42418120327` but test compilation failed
-  because the recovered AI test helper lacked a CoroutineScope receiver; corrected in the follow-up.
-- Follow-up `259b1d5`, run `42418618474`: 375 tests, 3 failures (German POS compatibility,
-  echoed-header redaction, cancellation fixture throttling).
-- `7e115e3`, run `42419319306`: APK compiled, 385 tests, 2 failures. BYOK tests passed;
-  remaining failures exposed missing German noun-capitalization candidates and a test's incorrect
-  expectation for Google's inconsistent Turkmen mapping (Latn script, mapped to Cyrillic model).
-  Both corrected in the next follow-up; final CI pending.
-- M6 optional backends and NCNN remain unimplemented and absent from the engine picker.
+- `e97ef54`, CI run [42419879098](https://github.com/arrow-poppa/droid-sentence-miner/actions/runs/42419879098):
+  **389 tests, 0 skipped, 0 failures/errors**, including 107 AI tests across 47 total suites.
+  Unit-test and debug-APK compilation steps succeeded. All compilation ran on GitHub Actions.
+- M1–M3: five ML Kit scripts, language catalog/profiles and pinned PaddleOCR ONNX manager/inference
+  are implemented. Physical Android recognition, delivery and geometry remain unverified.
+- M4: recovered parser and behavioral tests integrated; app scan/tap/lookup/mining paths pass
+  study language. Follow-up preserves spaces between wrapped non-Japanese rows in the tracker.
+- M5: recovered BYOK core/UI/tests integrated, native popup/settings and secure secrets storage.
+  Mock HTTP tests pass; live APIs, Android Keystore and popup/device behavior are not verified.
+- M6: NCNN FP16 and secondary OCR engines are not implemented; assessment and limits are in
+  [multilingual.md](multilingual.md). No placeholder backends are exposed as functional.
+- Draft PR: https://github.com/arrow-poppa/droid-sentence-miner/pull/1 (fork `main`, no upstream merge).
 
 ## Next verification
 
-Push this branch, inspect the CI unit tests and debug APK, fix failures, then record exact results.
+Validate the final wrapped-text follow-up in CI and record its exact results.
 Device-only OCR/overlay/Anki checks must use a connected physical device and a CI-built APK.
 No local builds, no release tag, no upstream merge.

@@ -19,7 +19,8 @@ adb -s <serial> install -r /tmp/dsm-apk/app-debug.apk
 ```
 
 The CI runner uses JDK 21 and runs `./gradlew testDebugUnitTest assembleDebug --console=plain --continue`.
-The integration currently has 385 executed tests in its last completed run (2 failures under repair).
+The last verified code revision `e97ef54` passed 389 JVM unit tests (0 skipped, 0 failed) in GitHub Actions.
+The final wrapped-text follow-up adds regression coverage; see the current integration state.
 Final test evidence belongs in [validation.md](validation.md); device instrumentation remains separate
 and must not uninstall a personal dictionary collection.
 

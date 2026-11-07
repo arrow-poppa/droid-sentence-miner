@@ -162,4 +162,18 @@ class TextLineTrackerTest {
         val capped = ClipWindow.compute(0, null, null, nowMs = 100_000, beforeMs = 0, afterMs = 0, maxLengthMs = 30_000)
         assertEquals(30_000L, capped.endMs)
     }
+    @Test
+    fun spacedScriptsKeepWordBoundariesAcrossOcrRows() {
+        assertEquals("Она говорила по-русски", TextSimilarity.clean("Она говорила\nпо-русски", spaceDelimited = true))
+        assertEquals("مرحبا بالعالم", TextSimilarity.clean("مرحبا\nبالعالم", spaceDelimited = true))
+        assertEquals("café é bom", TextSimilarity.clean("café\né bom", spaceDelimited = true))
+    }
+
+    @Test
+    fun multilingualTrackerStoresSpacedSentenceAfterStableReads() {
+        val tracker = TextLineTracker(spaceDelimited = true)
+        val events = tracker.feed("Она говорила\nпо-русски" to 1000, "Она говорила\nпо-русски" to 1400)
+        assertEquals(listOf(Event.Started("Она говорила по-русски", 1000)), events)
+    }
+
 }

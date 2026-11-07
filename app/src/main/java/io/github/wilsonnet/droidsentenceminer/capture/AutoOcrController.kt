@@ -113,7 +113,7 @@ class AutoOcrController(
             _status.value = _status.value.copy(error = e.message ?: "OCR engine could not initialize")
             return false
         }
-        val tracker = TextLineTracker()
+        val tracker = TextLineTracker(spaceDelimited = profile.spaceDelimited)
         var lastSignature: IntArray? = null
         var lastRead = ""
         var lastCrops: List<Bitmap> = emptyList()
@@ -209,7 +209,7 @@ class AutoOcrController(
                         val screenshot = capture.latestScreenshot()
                         openLineId = textLog.startLine(refined, event.atMs, TextLineEntity.SOURCE_AUTO, screenshot)
                         // The slower pass counts as one more vote in the line's consensus.
-                        if (refined != TextSimilarity.clean(event.text)) tracker.addReading(refined)
+                        if (refined != TextSimilarity.clean(event.text, profile.spaceDelimited)) tracker.addReading(refined)
                         _status.value = _status.value.copy(lines = _status.value.lines + 1)
                         Log.i(TAG, "line @${event.atMs}: $refined")
                     }
@@ -228,14 +228,14 @@ class AutoOcrController(
 
     /** Re-reads a stable line with the user's OCR settings; keeps the fast read if worse. Stored joined. */
     private suspend fun refine(crops: List<Bitmap>, fastText: String, profile: TextProfile): String {
-        val fast = TextSimilarity.clean(fastText)
+        val fast = TextSimilarity.clean(fastText, profile.spaceDelimited)
         if (!prefs.ocrTwoPass.first() || crops.isEmpty()) return fast
         val dropNoise = prefs.ocrDropNoise.first()
         // Only ML Kit has a second, slower pass; meikiocr and PaddleOCR read once.
         val engine = runCatching { container.ocrEngine(twoPass = true, dropNoise = dropNoise) }.getOrNull()
         if (engine !is MlKitOcr) return fast
         val text = runCatching {
-            TextSimilarity.clean(crops.map { dialogueText(engine, it, dropNoise, profile) }.joinToString("\n"))
+            TextSimilarity.clean(crops.map { dialogueText(engine, it, dropNoise, profile) }.joinToString("\n"), profile.spaceDelimited)
         }.getOrElse { return fast }
         if (text.isBlank()) return fast
         return if (profile.score(text) >= profile.score(fast)) text else fast
