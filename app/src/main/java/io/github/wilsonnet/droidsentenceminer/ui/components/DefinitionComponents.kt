@@ -9,6 +9,8 @@ import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -49,6 +51,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import io.github.wilsonnet.droidsentenceminer.AppContainer
 import io.github.wilsonnet.droidsentenceminer.anki.AnkiResult
 import io.github.wilsonnet.droidsentenceminer.anki.CardEdits
+import io.github.wilsonnet.droidsentenceminer.anki.CardExtras
 import io.github.wilsonnet.droidsentenceminer.audio.AudioSegment
 import io.github.wilsonnet.droidsentenceminer.dict.TermLookup
 import kotlinx.coroutines.Dispatchers
@@ -73,6 +76,17 @@ fun WebViewBlock(
     onCardPick: ((Int, Long) -> Unit)? = null,
     /** The dictionary picked for each entry's card; entries without one keep the setting's choice. */
     cardPicks: Map<Int, Long> = emptyMap(),
+    /**
+     * The page can show an AI explanation box at its top (lookup popups). Decided once per page:
+     * AI settings load after the first frame, so the box comes and goes through [aiPayload].
+     */
+    aiBox: Boolean = false,
+    /** The AI box's content ([LookupAi.payload]); null: no box right now. */
+    aiPayload: String? = null,
+    /** The AI box's buttons (`dsm.ai`): generate, regenerate, cancel, copy, configure. */
+    onAiAction: ((String) -> Unit)? = null,
+    /** Non-empty text selected in the page, as it changes (`{popup-selection-text}` on the card). */
+    onSelectionChange: ((String) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val container = remember { AppContainer.from(context) }
@@ -81,7 +95,9 @@ fun WebViewBlock(
     val mineHandler = androidx.compose.runtime.rememberUpdatedState(onEntryMine)
     val editHandler = androidx.compose.runtime.rememberUpdatedState(onEntryEdit)
     val pickHandler = androidx.compose.runtime.rememberUpdatedState(onCardPick)
-    val scripted = onTextTap != null || onEntryMine != null || onCardPick != null
+    val aiHandler = androidx.compose.runtime.rememberUpdatedState(onAiAction)
+    val selectionHandler = androidx.compose.runtime.rememberUpdatedState(onSelectionChange)
+    val scripted = onTextTap != null || onEntryMine != null || onCardPick != null || aiBox || onSelectionChange != null
     Box(modifier = modifier.background(if (dark) ComposeColor(0xFF1E1E1E) else ComposeColor.White)) {
         AndroidView(
             modifier = Modifier.fillMaxWidth(),
@@ -134,6 +150,16 @@ fun WebViewBlock(
                                 }
 
                                 @android.webkit.JavascriptInterface
+                                fun selection(text: String) {
+                                    post { selectionHandler.value?.invoke(text) }
+                                }
+
+                                @android.webkit.JavascriptInterface
+                                fun ai(action: String) {
+                                    post { aiHandler.value?.invoke(action) }
+                                }
+
+                                @android.webkit.JavascriptInterface
                                 fun pick(index: Int, dictId: String) {
                                     val id = dictId.toLongOrNull() ?: return
                                     post { pickHandler.value?.invoke(index, id) }
@@ -149,11 +175,13 @@ fun WebViewBlock(
                     view.tag = html
                     view.loaded = false
                     val page = html + (if (onTextTap != null) TAP_SCRIPT else "") + (if (onEntryMine != null) ENTRY_SCRIPT else "") +
-                        (if (onCardPick != null) PICK_SCRIPT else "")
+                        (if (onCardPick != null) PICK_SCRIPT else "") + (if (aiBox) AI_SCRIPT else "") +
+                        (if (onSelectionChange != null) SELECTION_SCRIPT else "")
                     view.loadDataWithBaseURL(io.github.wilsonnet.droidsentenceminer.dict.DictMedia.PAGE_BASE_URL, page, "text/html", "UTF-8", null)
                 }
                 view.states = entryStates.entries.joinToString(",", "{", "}") { (i, st) -> "\"$i\":\"$st\"" }
                 view.picks = cardPicks.entries.joinToString(",", "{", "}") { (i, id) -> "\"$i\":\"$id\"" }
+                view.ai = if (aiBox) "${aiPayload ?: "null"}, $dark" else null
                 view.applyStates()
             },
         )
@@ -162,14 +190,117 @@ fun WebViewBlock(
 
 /** Remembers the entry button states until the page has loaded, then pushes them into it. */
 private class DefinitionWebView(context: android.content.Context) : WebView(context) {
-    var loaded = false
     var states = "{}"
     var picks = "{}"
 
+    /** `dsmSetAi` arguments (payload JSON, dark); pushed only when they change, so streaming doesn't flood. */
+    var ai: String? = null
+    private var pushedAi: String? = null
+
+    var loaded = false
+        set(value) {
+            field = value
+            if (!value) pushedAi = null // a new page has no box yet
+        }
+
     fun applyStates() {
-        if (loaded) evaluateJavascript("window.dsmSetStates && dsmSetStates($states); window.dsmSetPicks && dsmSetPicks($picks)", null)
+        if (!loaded) return
+        evaluateJavascript("window.dsmSetStates && dsmSetStates($states); window.dsmSetPicks && dsmSetPicks($picks)", null)
+        val args = ai
+        if (args != null && args != pushedAi) {
+            pushedAi = args
+            evaluateJavascript("window.dsmSetAi && dsmSetAi($args)", null)
+        }
     }
 }
+
+/** Reports a non-empty selection in the page (debounced), for the card's popup-selection field. */
+private const val SELECTION_SCRIPT = """<script>
+(function () {
+  var timer = null;
+  document.addEventListener('selectionchange', function () {
+    clearTimeout(timer);
+    timer = setTimeout(function () {
+      var t = String(window.getSelection() || '');
+      if (t.trim()) dsm.selection(t);
+    }, 150);
+  });
+})();
+</script>"""
+
+/**
+ * The AI explanation box at the top of the definition page, as Yomitan BYOK draws it
+ * (`#ai-explanation-top`, ext/css/display.css): it scrolls with the entries, so a long answer is
+ * never cut off. `dsmSetAi(payload, dark)` creates/updates/removes it ([LookupAi.payload]); text is
+ * always set as textContent (plain text, streamed chunks included). Taps inside it never look a
+ * word up; its buttons call `dsm.ai(action)`.
+ */
+private const val AI_SCRIPT = """<style>
+#ai-explanation-top{margin:2px 0 10px;padding:11px 14px 8px;background:linear-gradient(135deg,#f8f9ff 0%,#e8f0ff 100%);border:1px solid #d0d8f0;border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,.05);position:relative;overflow:hidden;color:#1f2330}
+#ai-explanation-top::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;background:linear-gradient(90deg,#4a90e2,#7bb3f0)}
+#ai-explanation-top.dark{background:linear-gradient(135deg,#1a1d2e 0%,#252842 100%);border-color:#3a3f5c;color:#e0e0e0}
+#ai-explanation-top.dark::before{background:linear-gradient(90deg,#5fa3f5,#8fc5ff)}
+#ai-explanation-top .ai-title{font-size:.8em;font-weight:600;opacity:.7;margin:0 34px 4px 0}
+#ai-explanation-top .ai-text{white-space:pre-wrap;user-select:text;-webkit-user-select:text}
+#ai-explanation-top.streaming .ai-text::after{content:'';display:inline-block;width:.45em;height:1em;margin-left:2px;vertical-align:text-bottom;background:currentColor;animation:dsm-ai-caret 1s step-end infinite}
+@keyframes dsm-ai-caret{0%,100%{opacity:.65}50%{opacity:0}}
+#ai-explanation-top .ai-status{font-size:.8em;opacity:.7}
+#ai-explanation-top .ai-error{color:#c62828}
+#ai-explanation-top.dark .ai-error{color:#ef9a9a}
+#ai-explanation-top .ai-actions{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
+#ai-explanation-top .ai-actions button{font:inherit;font-size:.85em;padding:3px 12px;border-radius:12px;border:1px solid currentColor;background:none;color:inherit;opacity:.85}
+#ai-explanation-top .ai-regenerate-btn{position:absolute;top:5px;right:5px;background:none;border:none;color:inherit;opacity:.7;font-size:17px;font-weight:bold;min-width:30px;min-height:30px;padding:2px 6px;border-radius:4px}
+#ai-explanation-top .ai-regenerate-btn:disabled{opacity:.3}
+[hidden]{display:none!important}
+</style>
+<script>
+function dsmSetAi(p, dark) {
+  var box = document.getElementById('ai-explanation-top');
+  if (!p) { if (box) box.remove(); return; }
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'ai-explanation-top';
+    box.innerHTML = '<div class="ai-title">AI explanation</div><div class="ai-text"></div>' +
+      '<div class="ai-status" role="status"></div><div class="ai-error" role="alert"></div><div class="ai-actions"></div>' +
+      '<button type="button" class="ai-regenerate-btn" data-ai="regen" aria-label="Regenerate explanation">↻</button>';
+    box.addEventListener('click', function (e) {
+      e.stopPropagation();
+      var b = e.target.closest && e.target.closest('button[data-ai]');
+      if (!b || b.disabled) return;
+      e.preventDefault();
+      var a = b.dataset.ai;
+      if (a === 'regen') a = box.dataset.status === 'idle' ? 'generate' : 'regenerate';
+      dsm.ai(a);
+    });
+    document.body.insertBefore(box, document.body.firstChild);
+  }
+  var st = p.status;
+  box.dataset.status = st;
+  box.classList.toggle('dark', !!dark);
+  box.classList.toggle('streaming', st === 'streaming');
+  var text = box.querySelector('.ai-text'), status = box.querySelector('.ai-status'), error = box.querySelector('.ai-error');
+  var t = p.text || '';
+  if (text.textContent !== t) text.textContent = t;
+  text.hidden = !t;
+  var msg = {'idle': '', 'not-configured': 'Set an endpoint, model and API key first.', 'loading': 'Generating explanation…',
+    'streaming': 'Receiving real time response…', 'done': p.cached ? 'Saved from an earlier request' : '', 'error': ''}[st] || '';
+  status.textContent = msg; status.hidden = !msg;
+  error.textContent = st === 'error' ? (p.message || 'AI request failed.') : ''; error.hidden = !error.textContent;
+  var actions = [];
+  if (st === 'idle') actions.push(['generate', 'Generate explanation']);
+  if (st === 'not-configured' || p.configurable) actions.push(['configure', 'Configure']);
+  if (st === 'loading' || st === 'streaming') actions.push(['cancel', 'Cancel']);
+  if (st === 'done') actions.push(['copy', 'Copy']);
+  if (st === 'error' && p.retryable) actions.unshift(['regenerate', 'Try again']);
+  var bar = box.querySelector('.ai-actions');
+  bar.innerHTML = '';
+  actions.forEach(function (a) {
+    var b = document.createElement('button'); b.type = 'button'; b.dataset.ai = a[0]; b.textContent = a[1]; bar.appendChild(b);
+  });
+  bar.hidden = actions.length === 0;
+  box.querySelector('.ai-regenerate-btn').disabled = st === 'loading' || st === 'streaming' || st === 'not-configured';
+}
+</script>"""
 
 /**
  * Dictionary headers as card pickers: a tap asks for that dictionary on the entry's card, and
@@ -289,6 +420,12 @@ private class WordLookupState {
     /** Per entry of [TermLookup.LookupDetails.entries]; missing until the duplicate check ran. */
     val entryStates = androidx.compose.runtime.mutableStateMapOf<Int, EntryState>()
 
+    /**
+     * The text last selected in the definition page (Yomitan's `{popup-selection-text}`); kept when
+     * the selection is cleared, since tapping "+ Anki" clears it first. Reset with each new lookup.
+     */
+    var popupSelection: String? = null
+
     /** Per entry: the dictionary tapped in the popup to go on its card instead of the setting's choice. */
     val cardPicks = androidx.compose.runtime.mutableStateMapOf<Int, Long>()
 
@@ -344,7 +481,7 @@ private fun rememberWordLookup(word: String, dark: Boolean): WordLookupState {
  * Mines a popup's card: the source's line, sentence and audio, with the card editor's changes
  * when there are any. Hosts without a line (Book, OCR test) leave it null and mine [sentence].
  */
-typealias MineCallback = suspend (TermLookup.LookupDetails?, CardEdits?) -> AnkiResult<String>
+typealias MineCallback = suspend (TermLookup.LookupDetails?, CardEdits?, CardExtras) -> AnkiResult<String>
 
 @Composable
 private fun mineAction(
@@ -353,6 +490,8 @@ private fun mineAction(
     sentence: String,
     image: Bitmap?,
     onMine: MineCallback?,
+    /** Read when the card is mined: the AI explanation shown then and the popup selection. */
+    extras: () -> CardExtras = { CardExtras.NONE },
 ): (Int, CardEdits?) -> Unit {
     val context = LocalContext.current
     val container = remember { AppContainer.from(context) }
@@ -360,11 +499,13 @@ private fun mineAction(
         // Only this entry's headword, reading and definitions go on the card (Yomitan's per-entry add).
         val details = state.cardDetails(index)
         val headword = details?.baseForm ?: word
+        val cardExtras = extras()
         state.entryStates[index] = EntryState.MINING
         state.status = null
         // App scope, not the popup's: closing the popup right after tapping must not drop the card.
         container.appScope.launch {
-            val result = onMine?.invoke(details, edits) ?: container.miner.mine(word, edits?.sentence ?: sentence, image, details)
+            val result = onMine?.invoke(details, edits, cardExtras)
+                ?: container.miner.mine(word, edits?.sentence ?: sentence, image, details, extras = cardExtras)
             withContext(Dispatchers.Main) {
                 state.entryStates[index] = if (result is AnkiResult.Success) EntryState.ADDED else EntryState.FAILED
                 state.status = when (result) {
@@ -415,6 +556,8 @@ private fun LookupBody(
     onTextTap: ((String, String) -> Unit)? = null,
     onEntryMine: ((Int) -> Unit)? = null,
     onEntryEdit: ((Int) -> Unit)? = null,
+    /** The AI explanation, drawn at the top of the definition page; null: none. */
+    ai: LookupAi? = null,
 ) {
     if (state.loading) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -426,7 +569,20 @@ private fun LookupBody(
     }
     val currentHtml = state.html
     if (currentHtml.isNullOrBlank() || state.details?.terms.isNullOrEmpty()) {
-        Text("No dictionary entry found.")
+        Column(Modifier.heightIn(max = maxHeight).verticalScroll(rememberScrollState())) {
+            Text("No dictionary entry found.")
+            // AI fallback for an unknown word: no page to put the box in, so it is drawn here, whole.
+            ai?.let {
+                Spacer(Modifier.size(8.dp))
+                AiExplanationSection(
+                    state = it.state,
+                    onGenerate = { it.act("generate") },
+                    onRegenerate = { it.act("regenerate") },
+                    onCancel = { it.act("cancel") },
+                    onConfigure = { it.act("configure") },
+                )
+            }
+        }
     } else {
         WebViewBlock(
             html = currentHtml,
@@ -441,6 +597,10 @@ private fun LookupBody(
             entryStates = state.entryStates.mapValues { it.value.js },
             onCardPick = state::pick,
             cardPicks = state.cardPicks.toMap(),
+            aiBox = true,
+            onSelectionChange = { state.popupSelection = it },
+            aiPayload = ai?.payload(),
+            onAiAction = ai?.let { a -> { action: String -> a.act(action) } },
         )
     }
 }
@@ -552,8 +712,12 @@ fun WordLookupDialog(
     val stack = rememberLookupStack(word, sentence)
     val entry = stack.last()
     val state = rememberWordLookup(entry.word, dark)
+    // The AI explanation is the first block of the definition page, as in Yomitan's popup.
+    val ai = rememberLookupAi(entry.word, entry.sentence, state.details, state.loading)
     // A word reached from a definition gets that definition's sentence, and no line audio/screenshot.
-    val mine = mineAction(state, entry.word, entry.sentence, image.takeIf { stack.size == 1 }, onMine.takeIf { stack.size == 1 })
+    val mine = mineAction(state, entry.word, entry.sentence, image.takeIf { stack.size == 1 }, onMine.takeIf { stack.size == 1 }) {
+        CardExtras(aiExplanation = ai?.text, popupSelection = state.popupSelection)
+    }
     val edit = editorAction(state, entry.word, entry.sentence, loadAudio.takeIf { stack.size == 1 }, mine, openEditor = null)
     val onTap = recursiveTap(stack)
     if (stack.size > 1) androidx.activity.compose.BackHandler { stack.removeAt(stack.lastIndex) }
@@ -564,9 +728,7 @@ fun WordLookupDialog(
         text = {
             // No verticalScroll here: the WebView scrolls itself, and an outer scroll fought it for drags.
             Column(Modifier.heightIn(max = 420.dp)) {
-                // Above the entries, as in Yomitan's popup.
-                LookupAiExplanation(entry.word, entry.sentence, state.details, state.loading)
-                LookupBody(state, dark, maxHeight = 360.dp, onTextTap = onTap, onEntryMine = { mine(it, null) }, onEntryEdit = edit)
+                LookupBody(state, dark, maxHeight = 360.dp, onTextTap = onTap, onEntryMine = { mine(it, null) }, onEntryEdit = edit, ai = ai)
                 state.status?.let {
                     Spacer(Modifier.size(8.dp))
                     Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
@@ -677,7 +839,12 @@ fun WordLookupCard(
     val stack = rememberLookupStack(word, sentence)
     val entry = stack.last()
     val state = rememberWordLookup(entry.word, dark)
-    val mine = mineAction(state, entry.word, entry.sentence, image.takeIf { stack.size == 1 }, onMine.takeIf { stack.size == 1 })
+    // The AI explanation is the first block of the definition page (above the entries, as in
+    // Yomitan's popup) and scrolls with them, so it is never cut off.
+    val ai = rememberLookupAi(entry.word, entry.sentence, state.details, state.loading)
+    val mine = mineAction(state, entry.word, entry.sentence, image.takeIf { stack.size == 1 }, onMine.takeIf { stack.size == 1 }) {
+        CardExtras(aiExplanation = ai?.text, popupSelection = state.popupSelection)
+    }
     val edit = editorAction(state, entry.word, entry.sentence, loadAudio.takeIf { stack.size == 1 }, mine, openEditor)
     val onTap = recursiveTap(stack)
 
@@ -715,11 +882,8 @@ fun WordLookupCard(
             // The rest of the card, whatever the header took: a fixed guess for the header clipped the
             // bottom of the definition when the header was taller (deinflection line, error, back).
             Column(Modifier.weight(1f, fill = false).padding(end = 8.dp)) {
-                // The AI explanation sits above the dictionary entries, as in Yomitan's popup; its
-                // own height is capped so the definitions below always keep most of the card.
-                LookupAiExplanation(entry.word, entry.sentence, state.details, state.loading)
                 Box(Modifier.weight(1f, fill = false)) {
-                    LookupBody(state, dark, maxHeight = maxHeight, onTextTap = onTap, onEntryMine = { mine(it, null) }, onEntryEdit = edit)
+                    LookupBody(state, dark, maxHeight = maxHeight, onTextTap = onTap, onEntryMine = { mine(it, null) }, onEntryEdit = edit, ai = ai)
                 }
             }
         }

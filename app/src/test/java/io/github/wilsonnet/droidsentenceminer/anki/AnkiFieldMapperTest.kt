@@ -132,4 +132,24 @@ class AnkiFieldMapperTest {
         assertEquals(CardFields.SENTENCE, assignment["Context Sentence"])
         assertEquals("", assignment["Sentence"])
     }
+
+    @Test
+    fun `AI explanation and popup selection map by Chimahon and Lapis field names`() {
+        val model = listOf("Expression", "SelectionText", "AI Explanation", "Sentence")
+        val extra = values + mapOf(
+            CardFields.AI_EXPLANATION to "Explained<br>in context",
+            CardFields.POPUP_SELECTION to "to inherit",
+        )
+        val mapped = AnkiFieldMapper.mapToNamedFields(model, extra)
+        assertEquals("to inherit", mapped["SelectionText"])
+        assertEquals("Explained<br>in context", mapped["AI Explanation"])
+        assertEquals("継承", mapped["Expression"])
+    }
+
+    @Test
+    fun `plain text extras become escaped field html with line breaks`() {
+        assertEquals("a &lt;b&gt;<br>c", CardHtml.plainText("  a <b>\r\nc "))
+        assertEquals("", CardHtml.plainText(null))
+        assertEquals("", CardHtml.plainText("   "))
+    }
 }

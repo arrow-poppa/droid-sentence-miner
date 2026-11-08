@@ -25,6 +25,9 @@ object AnkiFieldMapper {
         CardFields.SOURCE to listOf("source", "origin", "title", "url"),
         CardFields.PITCH_GRAPH to listOf("pitchgraph", "graph", "pitchaccentgraph", "pitchaccentgraphs", "pitchaccent", "pitch", "pitchaccents"),
         CardFields.WORD_AUDIO to listOf("wordaudio", "expressionaudio", "vocabaudio", "vocabularyaudio", "termaudio", "audioword"),
+        // Chimahon's AUTO_DETECT_ALIASES for {ai-explanation} and {popup-selection-text}.
+        CardFields.AI_EXPLANATION to listOf("aiexplanation", "aiexpl", "ai"),
+        CardFields.POPUP_SELECTION to listOf("popupselection", "popupselectiontext", "selectiontext", "selection", "selectedtext", "plainselectedtext"),
     )
 
     /** Fields that unambiguously hold the sentence clip (preferred over a plain "Audio"). */

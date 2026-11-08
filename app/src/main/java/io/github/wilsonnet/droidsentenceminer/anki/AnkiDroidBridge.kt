@@ -132,6 +132,8 @@ class AnkiDroidBridge(private val context: Context) : AnkiBridge {
                 CardFields.SOURCE to (card.sourceTitle ?: ""),
                 CardFields.WORD_AUDIO to (wordAudioHtml ?: ""),
                 CardFields.PITCH_GRAPH to card.pitchGraphHtml,
+                CardFields.AI_EXPLANATION to card.aiExplanationHtml,
+                CardFields.POPUP_SELECTION to card.popupSelectionHtml,
             )
             val t2 = android.os.SystemClock.elapsedRealtime()
             android.util.Log.i("DSM-Mine", "AnkiDroid: deck/model ${t1 - t0} ms, media ${t2 - t1} ms")
@@ -230,6 +232,7 @@ object Templates {
 <div class="sentence">{{Sentence}}</div>
 <div class="media">{{Image}}{{Audio}}</div>
 <div class="source">{{Source}}</div>
+{{#AiExplanation}}<div class="ai-explanation">{{AiExplanation}}</div>{{/AiExplanation}}
 """
 
     const val CSS = """
@@ -246,6 +249,7 @@ object Templates {
 .sentence b.target { color: #1B5E4A; }
 .media img { max-width: 100%; }
 .source { color: #888; font-size: 0.8em; }
+.ai-explanation { margin: 10px 0; padding: 8px 12px; border-left: 3px solid #4a90e2; background: rgba(74,144,226,0.08); font-size: 0.9em; }
 """
 }
 

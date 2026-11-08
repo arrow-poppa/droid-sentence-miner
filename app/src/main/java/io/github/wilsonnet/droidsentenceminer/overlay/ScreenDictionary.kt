@@ -290,7 +290,7 @@ class ScreenDictionary(
                         sentence = sentence,
                         image = null,
                         onDismiss = { dismiss() },
-                        onMine = { details, edits -> container.miner.mineLine(line(), word, details, edits = edits) },
+                        onMine = { details, edits, extras -> container.miner.mineLine(line(), word, details, edits = edits, extras = extras) },
                         maxHeight = with(local) { plan.maxHeight.toDp() },
                         handleBack = false,
                         width = popupWidthDp,

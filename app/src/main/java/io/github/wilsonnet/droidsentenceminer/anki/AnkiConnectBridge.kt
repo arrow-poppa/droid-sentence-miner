@@ -146,6 +146,8 @@ class AnkiConnectBridge(
             CardFields.SOURCE to (card.sourceTitle ?: ""),
             CardFields.WORD_AUDIO to (wordAudioField ?: ""),
             CardFields.PITCH_GRAPH to card.pitchGraphHtml,
+            CardFields.AI_EXPLANATION to card.aiExplanationHtml,
+            CardFields.POPUP_SELECTION to card.popupSelectionHtml,
         )
         val modelFields = modelFieldNames(model) ?: CardFields.ORDER
         val mappedFields = AnkiFieldMapper.mapToNamedFields(modelFields, valueMap, fieldMap)

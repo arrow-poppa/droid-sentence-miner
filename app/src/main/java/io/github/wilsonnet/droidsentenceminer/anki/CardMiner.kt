@@ -45,6 +45,7 @@ class CardMiner(
         audio: M4aEncoder.EncodedAudio? = null,
         /** Word audio already being fetched (see [mineLine]); null: fetched here, alongside the glossary. */
         wordAudioFetch: Deferred<WordAudio.Clip?>? = null,
+        extras: CardExtras = CardExtras.NONE,
     ): AnkiCard = withContext(Dispatchers.Default) {
         val snapshot = prefs.snapshot()
         val resolved = details ?: lookup.lookup(word, language = prefs.studyLanguage.first())
@@ -141,6 +142,8 @@ class CardMiner(
             sourceTitle = "Droid Sentence Miner (screen OCR)",
             tags = tags,
             glossaryMedia = glossaryMedia.values.toList(),
+            aiExplanationHtml = CardHtml.plainText(extras.aiExplanation),
+            popupSelectionHtml = CardHtml.plainText(extras.popupSelection),
         )
     }
 
@@ -170,9 +173,10 @@ class CardMiner(
         addToAnki: Boolean = true,
         audio: M4aEncoder.EncodedAudio? = null,
         wordAudioFetch: Deferred<WordAudio.Clip?>? = null,
+        extras: CardExtras = CardExtras.NONE,
     ): AnkiResult<String> = withContext(Dispatchers.IO) {
         val t0 = android.os.SystemClock.elapsedRealtime()
-        val card = buildCard(word, sentence, image, details, audio, wordAudioFetch)
+        val card = buildCard(word, sentence, image, details, audio, wordAudioFetch, extras)
         val snapshot = prefs.snapshot()
         val t1 = android.os.SystemClock.elapsedRealtime()
 
@@ -213,6 +217,7 @@ class CardMiner(
         audio: AudioSegment? = null,
         includeAudio: Boolean = true,
         edits: CardEdits? = null,
+        extras: CardExtras = CardExtras.NONE,
     ): AnkiResult<String> = coroutineScope {
         val t0 = android.os.SystemClock.elapsedRealtime()
         // Word audio is network-bound and the clip encode CPU-bound: start the fetch first so the
@@ -249,7 +254,7 @@ class CardMiner(
         val image = textLog.screenshot(line)
         val t2 = android.os.SystemClock.elapsedRealtime()
         android.util.Log.i(TAG, "line ${line.id}: clip+encode ${t1 - t0} ms (${segment?.durationMs ?: 0} ms audio), screenshot ${t2 - t1} ms")
-        val result = mine(word, edits?.sentence ?: line.text, image, resolved, audio = encoded, wordAudioFetch = wordAudioFetch)
+        val result = mine(word, edits?.sentence ?: line.text, image, resolved, audio = encoded, wordAudioFetch = wordAudioFetch, extras = extras)
         if (result is AnkiResult.Success) withContext(Dispatchers.IO) { textLog.dao.markMined(line.id) }
         result
     }

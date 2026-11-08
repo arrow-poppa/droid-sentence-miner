@@ -169,8 +169,13 @@ See `.opencode/skills/dsm-debug-api/SKILL.md` for the full reference and recipes
   text landed on the neighbouring word. Non-Japanese profiles now get one box per UTF-16 unit
   (gaps shared by the characters between words); Japanese keeps the flat symbol list (book mode
   and `PageLayout.clean` rely on it). Taps never hit a blank glyph (`ScreenText.glyphAt`, layer view).
-- **AI explanation = Yomitan's top box, Custom provider only** (`AiExplanationSection`,
-  `AiSettingsScreen`): rendered above `LookupBody` in both popups, height-capped. Settings expose
+- **AI explanation = Yomitan's top box, Custom provider only** (`rememberLookupAi`/`LookupAi`,
+  `AI_SCRIPT` in `DefinitionComponents.kt`, `AiSettingsScreen`): drawn *inside* the definition
+  WebView as its first block (`dsmSetAi(payload, dark)`, buttons → `dsm.ai(action)`), so it scrolls
+  with the entries — a separate height-capped Compose box above the WebView cut long answers in
+  half. The script is always on popup pages (`aiBox = true`): AI settings load after the first
+  frame. `AiExplanationSection` draws it natively only for the no-entry fallback. Cards: fields
+  `AiExplanation` / `PopupSelection` (`CardExtras` through `MineCallback` → `CardMiner`). Settings expose
   only `AiProviderType.CUSTOM`; `AiSettingsStore.migrateToCustom` moves older provider settings.
   `cancelPendingRequests` off keeps abandoned calls running into the cache (`Inflight.keepAlive`);
   the popup's Cancel always cancels (`AiExplanationService.cancel`).

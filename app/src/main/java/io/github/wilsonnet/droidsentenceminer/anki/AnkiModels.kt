@@ -10,6 +10,17 @@ import io.github.wilsonnet.droidsentenceminer.dict.TermLookup
  */
 data class CardEdits(val sentence: String, val audio: AudioSegment?)
 
+/**
+ * What the lookup popup adds to a card besides the entry: the finished AI explanation (Chimahon's
+ * `{ai-explanation}`) and the text last selected in the popup (Yomitan's `{popup-selection-text}`).
+ * Plain text; [CardHtml.plainText] turns it into field HTML.
+ */
+data class CardExtras(val aiExplanation: String? = null, val popupSelection: String? = null) {
+    companion object {
+        val NONE = CardExtras()
+    }
+}
+
 /** Data needed to create one Anki note. */
 data class AnkiCard(
     val expression: String,
@@ -30,6 +41,10 @@ data class AnkiCard(
     val tags: List<String> = emptyList(),
     /** Dictionary images referenced by [meaningHtml] (`src="<name>"`), stored as Anki media on add. */
     val glossaryMedia: List<GlossaryMedia> = emptyList(),
+    /** The popup's AI explanation as field HTML; empty when none was generated. */
+    val aiExplanationHtml: String = "",
+    /** The text selected in the popup as field HTML; empty when nothing was selected. */
+    val popupSelectionHtml: String = "",
 ) {
     override fun equals(other: Any?): Boolean = this === other
     override fun hashCode(): Int = System.identityHashCode(this)
@@ -71,8 +86,11 @@ object CardFields {
     const val SOURCE = "Source"
     const val WORD_AUDIO = "WordAudio"
     const val PITCH_GRAPH = "PitchGraph"
+    const val AI_EXPLANATION = "AiExplanation"
+    const val POPUP_SELECTION = "PopupSelection"
 
-    val ORDER = listOf(EXPRESSION, READING, MEANING, SENTENCE, IMAGE, AUDIO, SOURCE, WORD_AUDIO, PITCH_GRAPH)
+    /** New fields go last: unknown note types without name matches are filled by position. */
+    val ORDER = listOf(EXPRESSION, READING, MEANING, SENTENCE, IMAGE, AUDIO, SOURCE, WORD_AUDIO, PITCH_GRAPH, AI_EXPLANATION, POPUP_SELECTION)
 
     /** Names shown in the Fields editor. */
     fun label(canonical: String): String = when (canonical) {
@@ -85,11 +103,17 @@ object CardFields {
         SOURCE -> "Source"
         WORD_AUDIO -> "Word audio"
         PITCH_GRAPH -> "Pitch graph"
+        AI_EXPLANATION -> "AI explanation"
+        POPUP_SELECTION -> "Popup selection"
         else -> "Nothing"
     }
 }
 
 object CardHtml {
+    /** Plain text as field HTML: escaped, line breaks kept (Chimahon's escapeHtmlWithLineBreaks). */
+    fun plainText(text: String?): String =
+        text?.trim()?.takeIf { it.isNotEmpty() }?.let { GlossaryHtml.escape(it.replace("\r\n", "\n")).replace("\n", "<br>") }.orEmpty()
+
     fun sentenceFor(model: String, card: AnkiCard): String =
         if (model == io.github.wilsonnet.droidsentenceminer.core.DsmPrefs.DEFAULT_MODEL) card.sentenceHtml
         else GlossaryHtml.escape(card.sentence)

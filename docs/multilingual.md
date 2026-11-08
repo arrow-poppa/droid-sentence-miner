@@ -75,16 +75,20 @@ first start (`AiSettingsStore.migrateToCustom`: same model and key, the provider
 OpenAI-compatible URL). The request builder still has those adapters; only Custom is reachable.
 
 The explanation is shown **at the top of the lookup popup, above the dictionary entries**, like
-Yomitan's `#ai-explanation-top`: tinted card with an accent bar, selectable plain text with a
-blinking caret while streaming, ↻ (generate/regenerate) in the corner, Cancel, Copy, Try again.
-Its height is capped (170 dp, scrolls) so the definitions keep most of the popup.
+Yomitan's `#ai-explanation-top`: it is the first block of the definition page itself
+(`AI_SCRIPT`/`dsmSetAi` in the popup WebView), so it scrolls with the entries and is never cut off.
+Tinted card with an accent bar, selectable plain text with a blinking caret while streaming, ↻
+(generate/regenerate) in the corner, Cancel, Copy, Try again. Without a dictionary entry (AI
+fallback) the same box is drawn natively.
 
 These protocols are covered by mock HTTP tests; no paid/live API calls are required or implied.
 The target is the original selected surface, with the lemma only as a hint. AI is disabled by
 default; nothing is sent until it is enabled and an endpoint, model and key are set. With
 *Cancel unfinished requests* off, an abandoned request finishes in the background into the cache
 (the popup's Cancel still cancels). Unknown words show AI only when fallback is enabled and never
-gain a fake local dictionary entry. No screenshot is sent and AI text is not exported to Anki.
+gain a fake local dictionary entry. No screenshot is sent. The finished explanation goes on the card only if a note-type field is
+mapped to *AI explanation* (Settings → Anki → Fields); *Popup selection* exports the popup's
+selected text.
 
 Keys use Android Keystore AES-GCM and an excluded secrets DataStore. HTTPS is required except
 explicitly acknowledged LAN/loopback HTTP. Certificate verification stays enabled; redirects
