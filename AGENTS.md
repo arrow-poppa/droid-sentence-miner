@@ -159,6 +159,10 @@ See `.opencode/skills/dsm-debug-api/SKILL.md` for the full reference and recipes
 
 ## Gotchas learned the hard way
 
+- **Bubble tap modes** (`BubbleMode`, `OverlayService.onBubbleTap`): Settings and the long-press
+  menu use the same `bubble_mode` preference and `fromPreference` fallback to QUICK. AUTO_OCR
+  reuses `toggleAutoOcr`/`startAutoOcr`; after consent, call `startAutoOcr` so missing areas open
+  the editor too. Start/stop toasts follow actual controller state in this mode.
 - **Multilingual coordinates and surfaces**: `OcrGeometry` maps ML Kit's upscaled line/symbol boxes
   to the input crop. `AppContainer` passes the study language to scan/tap/lookup; parser candidates
   never replace source spans. Keep `ScreenTextLine.confidence` null when unreported. See

@@ -30,6 +30,9 @@ button or gesture returns to the list.
 - **Download meikiocr models (31 MB)** — until installed, the Japanese path uses ML Kit.
 - **Two-pass OCR (ML Kit)** — optionally re-read detected lines at higher resolution.
 - **Filter non-study-language lines** — remove background UI noise using the chosen text profile.
+- **Bubble tap** — *Quick lookup* (default), *Scan region*, or *Toggle auto OCR*. The last option
+  starts/stops reading with one tap and a confirmation toast; capture consent and the text-area
+  editor open when needed. This is the same saved choice as in the bubble's long-press menu.
 - **Live text window** — show the floating feed of new lines while auto OCR runs.
 - **Hide DSM windows from OCR** (on by default) — the live text window and the bubble are
   `FLAG_SECURE`, so screen capture sees them black and a full-screen auto OCR area doesn't read

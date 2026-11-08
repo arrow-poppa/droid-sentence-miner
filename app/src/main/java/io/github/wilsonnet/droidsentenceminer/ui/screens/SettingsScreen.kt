@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import io.github.wilsonnet.droidsentenceminer.AppContainer
 import io.github.wilsonnet.droidsentenceminer.BuildConfig
 import io.github.wilsonnet.droidsentenceminer.audio.AudioCaptureManager
+import io.github.wilsonnet.droidsentenceminer.overlay.BubbleMode
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -70,6 +71,8 @@ fun SettingsScreen(modifier: Modifier = Modifier, onOpen: (String) -> Unit = {})
     }
 
     val autoInterval by container.prefs.autoOcrIntervalMs.collectAsState(initial = 400)
+    val bubbleModePreference by container.prefs.bubbleMode.collectAsState(initial = null)
+    val bubbleMode = BubbleMode.fromPreference(bubbleModePreference)
     val liveWindow by container.prefs.liveTextWindow.collectAsState(initial = true)
     val hideOverlays by container.prefs.hideOverlaysFromCapture.collectAsState(initial = true)
     val screenDictionary by container.prefs.screenDictionary.collectAsState(initial = true)
@@ -220,6 +223,21 @@ fun SettingsScreen(modifier: Modifier = Modifier, onOpen: (String) -> Unit = {})
                 ) { value ->
                     dropNoise = value
                     scope.launch { container.prefs.setOcrDropNoise(value) }
+                }
+                Text("Bubble tap", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Choose what one tap on the floating bubble does. Toggle auto OCR starts or stops reading; screen capture permission is requested when needed.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                BubbleMode.entries.forEach { mode ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.material3.RadioButton(
+                            selected = bubbleMode == mode,
+                            onClick = { scope.launch { container.prefs.setBubbleMode(mode.preferenceValue) } },
+                        )
+                        Text(mode.label, style = MaterialTheme.typography.bodyMedium)
+                    }
                 }
                 SettingSwitch(
                     title = "Live text window",

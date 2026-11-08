@@ -107,11 +107,22 @@ class QuickSelectView(
     }
 }
 
-/** What a tap on the bubble does; picked in the bubble menu (hold the bubble). */
-enum class BubbleMode {
+/** What a tap on the bubble does; shared by Settings and the bubble's long-press menu. */
+enum class BubbleMode(val label: String) {
     /** Box a word, its definition pops up next to it; the rest of the box stays tappable. */
-    QUICK,
+    QUICK("Quick lookup"),
 
     /** The region editor with Scan / Full screen / Live, results in the bottom panel. */
-    REGION,
+    REGION("Scan region"),
+
+    /** Start or stop auto OCR, requesting capture consent when needed. */
+    AUTO_OCR("Toggle auto OCR"),
+    ;
+
+    val preferenceValue: String get() = name.lowercase()
+
+    companion object {
+        fun fromPreference(value: String?): BubbleMode =
+            entries.firstOrNull { it.name.equals(value, ignoreCase = true) } ?: QUICK
+    }
 }

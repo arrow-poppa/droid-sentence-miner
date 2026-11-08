@@ -8,17 +8,19 @@ the menu, and a way to start or stop capture from anywhere.
 
 ## The bubble
 
-The bubble is a small draggable overlay. Drag it away from the text you are reading. Tap it to
-open the current overlay panel; long-press it for the menu. **Bubble tap** chooses what a normal
-tap does:
+The bubble is a small draggable overlay. Drag it away from the text you are reading. Long-press
+it for the menu. **Settings → OCR → Bubble tap** or **Bubble tap** in that menu chooses what a
+normal tap does:
 
 - **Quick lookup** (default) — drag a box around a word, and its lines are laid over the screen so
   you can tap the word. The first word found is opened immediately.
 - **Scan region** — the older capture-box workflow.
+- **Toggle auto OCR** — start or stop continuous reading with one tap. A toast confirms the
+  change; Android capture consent and the text-area editor open when needed.
 
 The menu:
 
-- **Bubble tap: Quick lookup / Scan region**
+- **Bubble tap: Quick lookup / Scan region / Toggle auto OCR**
 - **Start auto OCR** / **Stop auto OCR**
 - **Auto OCR text areas**
 - **Mine the latest line**
@@ -33,7 +35,7 @@ The foreground-service notification stays available as a shortcut when the bubbl
 
 ## Scan once
 
-1. Tap the bubble, or long-press → **Scan once: pick a region**.
+1. Tap the bubble in **Scan region** mode, or long-press → **Scan once: pick a region**.
 2. Adjust the capture box over the text. This box is separate from the auto OCR text areas.
 3. Tap **Scan region**.
 4. Tap a highlighted word for definitions, then **Anki**.

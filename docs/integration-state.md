@@ -53,6 +53,9 @@ subagents only when needed. PRs carry no personal name or email.
 
 ## Delivery and next verification
 
+- Bubble tap toggle follow-up (2026-11-08): Settings and the long-press menu share QUICK / REGION /
+  AUTO_OCR; the new mode uses the existing consent/start/stop paths with state-change toasts.
+  JVM preference compatibility tests added; source review only, CI and device validation pending.
 - Code commits in this continuation: `9eafb28`, `259b1d5`, `7e115e3`, `e97ef54`, `e720d86`.
 - Both the branch-push CI and fork-PR CI passed for `e720d86`. Debug APK: 155,340,251 bytes;
   ABIs arm64-v8a, armeabi-v7a, x86_64; SHA-256

@@ -7,6 +7,7 @@ versions are the `v*` tags that publish a signed APK on
 ## [Unreleased]
 
 ### Added
+- *Bubble tap → Toggle auto OCR* starts or stops auto OCR with one tap, with start/stop feedback. Choose it in Settings → OCR or the bubble's long-press menu; screen-sharing consent and text-area selection open when needed.
 - Independent study-language, OCR engine and script/model settings; all five ML Kit script recognizers and an official language catalog.
 - On-demand, checksum-verified PaddleOCR ONNX models for Latin, Chinese/Japanese, Cyrillic, Arabic, Greek and Korean (Android inference validation pending).
 - Language-aware dictionary selection and morphology, including English irregulars, phrasal verbs and dictionary-validated hyphenated compounds; original text offsets are retained.

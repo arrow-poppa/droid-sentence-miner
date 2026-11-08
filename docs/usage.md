@@ -37,7 +37,9 @@ Step by step from a fresh install. The website has the same flow with screenshot
    *App info → ⋮ → Allow restricted settings*. Auto OCR still asks for screen sharing each
    session: Android has no other way to record the playback audio for sentence cards.
 4. **Auto OCR (recommended for games/video)** — open the game, long-press the bubble → *Start
-   auto OCR* (or set *Bubble tap* to *Scan region* and tap the bubble → *Live*); *Live* uses the box you drew as the text area when this orientation has none, and
+   auto OCR*. For one-tap start/stop, choose *Settings → OCR → Bubble tap → Toggle auto OCR*
+   (also in the long-press menu), then tap the bubble. A toast confirms when reading starts/stops.
+   Alternatively set *Bubble tap* to *Scan region* and tap the bubble → *Live*; *Live* uses the box you drew as the text area when this orientation has none, and
    turns into *Stop live* while auto OCR runs. In the
    share dialog choose *A single app* → your game. If no text area exists for the current
    orientation the area editor opens: drag boxes over the dialogue/subtitle area (drag to move,

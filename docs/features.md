@@ -80,8 +80,10 @@ Everything the app does, in detail. The short version is in the [README](../READ
   before mining; optional (experimental) silence trimming is in Settings.
 - **Floating popup overlay** — a draggable bubble that stays on screen. Tap it, drag a box over a
   word and its definition pops up right next to it (*Quick lookup*, the default); other words in
-  the box can be tapped too. Long-press opens the menu, where *Bubble tap* switches to *Scan
-  region* (the region editor with Scan / Full screen / Live and the results panel). The
+  the box can be tapped too. *Settings → OCR → Bubble tap* and the long-press menu offer *Quick
+  lookup*, *Scan region* (the region editor with Scan / Full screen / Live and the results panel),
+  or *Toggle auto OCR* (one tap starts/stops reading, with a toast; asks for capture consent and
+  text areas when needed). Both menus share the same saved choice. The
   notification stays available as a shortcut.
 - **Japanese OCR trained on games** — on-device [meikiocr](https://github.com/rtr46/meikiocr)
   (ONNX Runtime), a detector + recognizer trained on Japanese video-game text: 3–19× fewer

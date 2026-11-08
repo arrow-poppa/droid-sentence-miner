@@ -207,7 +207,7 @@ class DsmPrefs(private val context: Context) {
         it[if (landscape) Keys.liveWindowYLand else Keys.liveWindowY] = y
     }
 
-    /** What a bubble tap does: an `overlay.BubbleMode` name (quick, region); quick lookup by default. */
+    /** What a bubble tap does: an `overlay.BubbleMode` name (quick, region, auto_ocr); quick lookup by default. */
     val bubbleMode: Flow<String?> = context.dataStore.data.map { it[Keys.bubbleMode] }
     suspend fun setBubbleMode(value: String) = edit { it[Keys.bubbleMode] = value }
 

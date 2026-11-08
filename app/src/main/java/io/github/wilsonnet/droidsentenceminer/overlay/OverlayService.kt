@@ -161,7 +161,7 @@ class OverlayService : Service() {
         scope.launch { container.prefs.pauseOnLookup.collect { screenDictionary.pauseMedia = it } }
         scope.launch {
             container.prefs.bubbleMode.collect { name ->
-                panelState.bubbleMode = BubbleMode.entries.firstOrNull { it.name.equals(name, true) } ?: BubbleMode.QUICK
+                panelState.bubbleMode = BubbleMode.fromPreference(name)
             }
         }
         screenDictionary.refresh = { autoOcr.readNow() }
@@ -190,6 +190,13 @@ class OverlayService : Service() {
                 autoOcrState.value = it
                 if (changed && running.value) startForegroundCompat(includeProjection = captureManager.isReady)
                 if (changed) {
+                    if (panelState.bubbleMode == BubbleMode.AUTO_OCR) {
+                        android.widget.Toast.makeText(
+                            this@OverlayService,
+                            if (it.running) "Auto OCR started" else "Auto OCR stopped",
+                            android.widget.Toast.LENGTH_SHORT,
+                        ).show()
+                    }
                     if (it.running) {
                         liveDismissed = false
                         if (container.prefs.liveTextWindow.first()) showLiveWindow()
@@ -393,6 +400,7 @@ class OverlayService : Service() {
         when (panelState.bubbleMode) {
             BubbleMode.QUICK -> startQuickLookup()
             BubbleMode.REGION -> showCaptureOverlay()
+            BubbleMode.AUTO_OCR -> toggleAutoOcr()
         }
     }
 
@@ -621,7 +629,7 @@ class OverlayService : Service() {
         }
         if (pendingAutoOcr) {
             pendingAutoOcr = false
-            autoOcr.start()
+            startAutoOcr()
         }
         if (pendingQuick) {
             pendingQuick = false
@@ -1119,7 +1127,7 @@ class OverlayService : Service() {
         },
         onBubbleMode = { mode ->
             panelState.bubbleMode = mode
-            scope.launch { container.prefs.setBubbleMode(mode.name.lowercase()) }
+            scope.launch { container.prefs.setBubbleMode(mode.preferenceValue) }
         },
     )
 

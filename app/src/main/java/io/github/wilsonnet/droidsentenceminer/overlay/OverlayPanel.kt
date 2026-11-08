@@ -10,6 +10,8 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -160,21 +162,19 @@ private fun Header(state: OverlayPanelState, callbacks: OverlayCallbacks) {
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun MenuContent(state: OverlayPanelState, callbacks: OverlayCallbacks) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Spacer(Modifier.height(4.dp))
         Text("Bubble tap", style = MaterialTheme.typography.labelLarge)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(
-                selected = state.bubbleMode == BubbleMode.QUICK,
-                onClick = { callbacks.onBubbleMode(BubbleMode.QUICK) },
-                label = { Text("Quick lookup") },
-            )
-            FilterChip(
-                selected = state.bubbleMode == BubbleMode.REGION,
-                onClick = { callbacks.onBubbleMode(BubbleMode.REGION) },
-                label = { Text("Scan region") },
-            )
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            BubbleMode.entries.forEach { mode ->
+                FilterChip(
+                    selected = state.bubbleMode == mode,
+                    onClick = { callbacks.onBubbleMode(mode) },
+                    label = { Text(mode.label) },
+                )
+            }
         }
         if (state.autoOcrRunning && state.captureStopped) {
             Button(onClick = callbacks.onRestartCapture, modifier = Modifier.fillMaxWidth()) {
