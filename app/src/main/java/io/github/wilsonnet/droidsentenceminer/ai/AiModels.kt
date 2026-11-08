@@ -99,15 +99,29 @@ data class ProviderSettings(
     val requestBodyJson: String = "",
 )
 
+/**
+ * The app only offers [AiProviderType.CUSTOM] (any OpenAI-compatible endpoint: OpenAI, OpenRouter,
+ * DeepSeek, Gemini's OpenAI endpoint, a local server), like Yomitan BYOK's "Custom" provider with
+ * all of its options. The other types stay for the request builder and old saved settings, which
+ * [AiSettingsStore.migrateToCustom] moves over.
+ */
 data class AiSettings(
     val enabled: Boolean = false,
-    val provider: AiProviderType = AiProviderType.OPENAI,
+    val provider: AiProviderType = AiProviderType.CUSTOM,
     val systemPrompt: String = "",
     val userPrompt: String = DEFAULT_USER_PROMPT,
     val temperature: Double = DEFAULT_TEMPERATURE,
     val streaming: Boolean = true,
-    /** Explain right after a lookup without a tap. Off by default: nothing is sent unprompted. */
-    val autoExplain: Boolean = false,
+    /**
+     * Explain as soon as a word is looked up (Yomitan's `autoGenerateOnLookup`, on by default there
+     * too). Nothing is sent while [enabled] is off, and that is off by default.
+     */
+    val autoExplain: Boolean = true,
+    /**
+     * Drop an unfinished request when its popup closes or another word is looked up. Off: it
+     * finishes in the background and its answer is cached (a cancelled call is usually billed anyway).
+     */
+    val cancelPendingRequests: Boolean = true,
     /** Offer an AI explanation when no local dictionary entry exists ([AiFallback]). */
     val fallbackForUnknownWords: Boolean = false,
     /** Acknowledges that an `http://` loopback/LAN endpoint sends the key unencrypted. */

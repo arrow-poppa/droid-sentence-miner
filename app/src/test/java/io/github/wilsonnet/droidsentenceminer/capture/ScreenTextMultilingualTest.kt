@@ -56,4 +56,23 @@ class ScreenTextMultilingualTest {
         org.junit.Assert.assertNull(line.confidence)
     }
 
+    @Test
+    fun leadingBlankKeepsCharacterBoxesAligned() {
+        val chars = (0 until 4).map { BoundingBox(it * 10, 0, it * 10 + 10, 20) }
+        val raw = OcrLine(" Hi!", BoundingBox(0, 0, 40, 20), chars = chars)
+        val line = ScreenText.fromRead(listOf(raw), listOf(raw.box), 100, 20, area, 0, TextProfile.LATIN).single()
+        assertEquals("Hi!", line.text)
+        // H is the second raw box, not the first.
+        assertEquals(0.1f, line.glyphs[0].left, 1e-4f)
+    }
+
+    @Test
+    fun tapBetweenWordsHitsAWordNotTheSpace() {
+        val chars = listOf(BoundingBox(0, 0, 10, 20), BoundingBox(10, 0, 30, 20), BoundingBox(30, 0, 40, 20))
+        val raw = OcrLine("a b", BoundingBox(0, 0, 40, 20), chars = chars)
+        val lines = ScreenText.fromRead(listOf(raw), listOf(raw.box), 100, 20, area, 0, TextProfile.LATIN)
+        val y = lines.single().glyphs[1].centerY
+        // Inside the space's box, a little nearer to "b": the space itself is never the hit.
+        assertEquals(0 to 2, ScreenText.glyphAt(lines, 0.22f, y, slackX = 0.15f))
+    }
 }

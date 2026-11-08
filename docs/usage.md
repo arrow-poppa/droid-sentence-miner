@@ -4,7 +4,7 @@
 
 ## Multilingual implementation branch
 
-For multilingual mining, select the study language in Settings separately from the OCR engine/script. Download the chosen Paddle models or request the ML Kit modules as needed. Configure AI in Settings → AI explanations; enabling AI and tapping Explain sends the selected word and sentence to that provider. See [multilingual setup](multilingual.md).
+For multilingual mining, select the study language in Settings separately from the OCR engine/script. Download the chosen Paddle models or request the ML Kit modules as needed. Configure AI in Settings → AI explanation (BYOK): one Custom OpenAI-compatible provider (endpoint, key, model, OpenRouter routing, thinking, request body). Once enabled, every lookup sends the selected word and its sentence and the answer appears at the top of the popup (turn off *Generate on lookup* to send only on ↻). See [multilingual setup](multilingual.md).
 
 Step by step from a fresh install. The website has the same flow with screenshots: [docs](https://wilsonnet.github.io/droid-sentence-miner/docs/getting-started/installation/).
 

@@ -79,6 +79,30 @@ class AiSettingsStore internal constructor(
         }
     }
 
+    /**
+     * Settings saved for another provider (before the app offered only Custom) become the Custom
+     * provider's: same model, its endpoint (or the provider's OpenAI-compatible one) and its key,
+     * unless Custom already has its own. Idempotent; runs once per process from AppContainer.
+     */
+    suspend fun migrateToCustom() {
+        val saved = current()
+        val old = saved.provider
+        if (old == AiProviderType.CUSTOM) return
+        val from = saved.of(old)
+        val custom = saved.of(AiProviderType.CUSTOM)
+        if (custom.endpoint.isBlank()) {
+            val moved = from.copy(
+                apiKey = Secret.EMPTY,
+                model = from.model.ifBlank { old.defaultModel },
+                endpoint = from.endpoint.ifBlank { openAiCompatibleEndpoint(old) },
+            )
+            update { it.copy(provider = AiProviderType.CUSTOM, providers = it.providers + (AiProviderType.CUSTOM to moved)) }
+        } else {
+            update { it.copy(provider = AiProviderType.CUSTOM) }
+        }
+        if (custom.apiKey.isBlank && !from.apiKey.isBlank) setApiKey(AiProviderType.CUSTOM, from.apiKey.value)
+    }
+
     suspend fun clearAll() {
         settings.edit { it.clear() }
         secrets.edit { it.clear() }
@@ -118,12 +142,13 @@ class AiSettingsStore internal constructor(
         }
         return AiSettings(
             enabled = prefs[ENABLED] ?: d.enabled,
-            provider = AiProviderType.fromName(prefs[PROVIDER]),
+            provider = prefs[PROVIDER]?.let(AiProviderType::fromName) ?: d.provider,
             systemPrompt = prefs[SYSTEM_PROMPT] ?: d.systemPrompt,
             userPrompt = prefs[USER_PROMPT]?.takeIf { it.isNotBlank() } ?: d.userPrompt,
             temperature = (prefs[TEMPERATURE] ?: d.temperature),
             streaming = prefs[STREAMING] ?: d.streaming,
             autoExplain = prefs[AUTO_EXPLAIN] ?: d.autoExplain,
+            cancelPendingRequests = prefs[CANCEL_PENDING] ?: d.cancelPendingRequests,
             fallbackForUnknownWords = prefs[FALLBACK] ?: d.fallbackForUnknownWords,
             allowInsecureLocalEndpoint = prefs[INSECURE_LOCAL] ?: d.allowInsecureLocalEndpoint,
             providers = providers,
@@ -138,6 +163,7 @@ class AiSettingsStore internal constructor(
         prefs[TEMPERATURE] = s.temperature
         prefs[STREAMING] = s.streaming
         prefs[AUTO_EXPLAIN] = s.autoExplain
+        prefs[CANCEL_PENDING] = s.cancelPendingRequests
         prefs[FALLBACK] = s.fallbackForUnknownWords
         prefs[INSECURE_LOCAL] = s.allowInsecureLocalEndpoint
         for (type in AiProviderType.entries) {
@@ -168,7 +194,14 @@ class AiSettingsStore internal constructor(
         private val TEMPERATURE = doublePreferencesKey("temperature")
         private val STREAMING = booleanPreferencesKey("streaming")
         private val AUTO_EXPLAIN = booleanPreferencesKey("autoExplain")
+        private val CANCEL_PENDING = booleanPreferencesKey("cancelPendingRequests")
         private val FALLBACK = booleanPreferencesKey("fallbackForUnknownWords")
         private val INSECURE_LOCAL = booleanPreferencesKey("allowInsecureLocalEndpoint")
     }
+}
+
+/** The chat-completions URL a provider's key works with through the Custom (OpenAI-compatible) provider. */
+internal fun openAiCompatibleEndpoint(type: AiProviderType): String = when (type) {
+    AiProviderType.GEMINI -> "https://generativelanguage.googleapis.com/v1beta/openai/chat/completions"
+    else -> type.defaultEndpoint
 }

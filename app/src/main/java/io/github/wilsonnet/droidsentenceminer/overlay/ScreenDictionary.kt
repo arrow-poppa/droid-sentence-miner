@@ -131,7 +131,7 @@ class ScreenDictionary(
             val existing = layers[index]
             val view = existing?.first ?: ScreenTextLayerView(context)
             val params = existing?.second ?: layerParams()
-            view.setLines(listOf(glyphs), listOf(index))
+            view.setLines(listOf(glyphs), listOf(index), listOf(line.text))
             view.onTap = { line, index -> lookupFrom(line, index) }
             view.onSelect = { line, range -> show(line, range) }
             params.x = left
@@ -197,19 +197,23 @@ class ScreenDictionary(
 
     private fun show(line: Int, range: IntRange) {
         val target = lines.getOrNull(line) ?: return
-        val last = min(range.last, target.text.lastIndex)
-        if (range.first > last) return
+        var first = range.first.coerceAtLeast(0)
+        var last = min(range.last, target.text.lastIndex)
+        // A drag over spaced text may start or end on a blank: the word is what is between.
+        while (first <= last && target.text[first].isWhitespace()) first++
+        while (last >= first && target.text[last].isWhitespace()) last--
+        if (first > last) return
         dismiss(resumeLater = true)
         handler.removeCallbacks(resume)
         if (pauseMedia) pauseMediaPlayback()
 
-        layers.values.forEach { (view, _) -> view.highlight(line, range.first..last) }
+        layers.values.forEach { (view, _) -> view.highlight(line, first..last) }
         val metrics = ScreenCaptureManager.screenMetrics(context)
         val w = metrics.widthPixels.toFloat()
         val h = metrics.heightPixels.toFloat()
-        val glyphs = (range.first..last).mapNotNull { target.glyphs.getOrNull(it) }.reduce { a, b -> a.union(b) }
+        val glyphs = (first..last).mapNotNull { target.glyphs.getOrNull(it) }.reduce { a, b -> a.union(b) }
         val anchor = Rect(glyphs.left * w, glyphs.top * h, glyphs.right * w, glyphs.bottom * h)
-        val word = target.text.substring(range.first, last + 1)
+        val word = target.text.substring(first, last + 1)
         val allText = lines.joinToString("\n") { it.text }
         // The log line has the sentence, its screenshot and its audio.
         openPopup(anchor, word, allText) { container.textLog.lineForSharedText(allText) }
@@ -459,6 +463,7 @@ class ScreenDictionary(
 class ScreenTextLayerView(context: Context) : View(context) {
     private var glyphs: List<List<RectF>> = emptyList()
     private var lineIds: List<Int> = emptyList()
+    private var texts: List<String> = emptyList()
     private var marked: Pair<Int, IntRange>? = null
     private var selecting: Pair<Int, IntRange>? = null
 
@@ -474,9 +479,11 @@ class ScreenTextLayerView(context: Context) : View(context) {
     private var moved = false
     private var anchor: Pair<Int, Int>? = null
 
-    fun setLines(glyphs: List<List<RectF>>, lineIds: List<Int>) {
+    /** [texts]: each line's text, indexed like its glyphs; blanks in it are never hit. */
+    fun setLines(glyphs: List<List<RectF>>, lineIds: List<Int>, texts: List<String> = emptyList()) {
         this.glyphs = glyphs
         this.lineIds = lineIds
+        this.texts = texts
         invalidate()
     }
 
@@ -499,6 +506,8 @@ class ScreenTextLayerView(context: Context) : View(context) {
         var bestD = Float.MAX_VALUE
         glyphs.forEachIndexed { l, line ->
             line.forEachIndexed { i, g ->
+                // A tap between two words goes to the nearer word: a space alone looks nothing up.
+                if (texts.getOrNull(l)?.getOrNull(i)?.isWhitespace() == true) return@forEachIndexed
                 if (x < g.left - slack || x > g.right + slack || y < g.top - slack || y > g.bottom + slack) return@forEachIndexed
                 val d = (g.centerX() - x) * (g.centerX() - x) + (g.centerY() - y) * (g.centerY() - y)
                 if (d < bestD) {

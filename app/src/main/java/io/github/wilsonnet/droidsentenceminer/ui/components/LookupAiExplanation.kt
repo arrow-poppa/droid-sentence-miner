@@ -3,6 +3,7 @@ package io.github.wilsonnet.droidsentenceminer.ui.components
 import android.content.Intent
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
@@ -12,6 +13,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -22,6 +24,7 @@ import io.github.wilsonnet.droidsentenceminer.ai.AiExplanationState
 import io.github.wilsonnet.droidsentenceminer.ai.AiRequest
 import io.github.wilsonnet.droidsentenceminer.ai.AiSettings
 import io.github.wilsonnet.droidsentenceminer.dict.TermLookup
+import kotlinx.coroutines.launch
 
 /** Request ownership follows the lookup's composition; changing context/settings cancels the old flow. */
 @Composable
@@ -33,6 +36,7 @@ internal fun LookupAiExplanation(
 ) {
     val context = LocalContext.current
     val container = remember { AppContainer.from(context) }
+    val scope = rememberCoroutineScope()
     val settings by container.aiSettings.flow.collectAsState(initial = AiSettings())
     val language by container.prefs.studyLanguage.collectAsState(initial = "ja")
     val hasEntry = details?.terms?.isNotEmpty() == true
@@ -53,12 +57,15 @@ internal fun LookupAiExplanation(
             state = container.aiExplanations.cached(request) ?: AiExplanationState.Idle
         }
     }
-    Column(Modifier.heightIn(max = 180.dp).verticalScroll(rememberScrollState())) {
+    Column(Modifier.padding(bottom = 6.dp).heightIn(max = 170.dp).verticalScroll(rememberScrollState())) {
         AiExplanationSection(
             state = state,
             onGenerate = { cancelled = false; generation++ },
             onRegenerate = { cancelled = false; generation = maxOf(2, generation + 1) },
-            onCancel = { cancelled = true },
+            onCancel = {
+                cancelled = true
+                scope.launch { container.aiExplanations.cancel(request) }
+            },
             onConfigure = {
                 context.startActivity(
                     Intent(context, MainActivity::class.java)

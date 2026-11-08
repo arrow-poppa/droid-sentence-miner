@@ -55,21 +55,36 @@ existing wrap-joining behavior.
 
 ## BYOK explanations
 
-| Provider | Implemented protocol | Advanced settings |
-|---|---|---|
-| OpenAI | Chat completions, JSON/SSE | Model-aware reasoning and temperature handling |
-| Gemini | generateContent/streamGenerateContent | System instruction and supported thinking options |
-| DeepSeek | OpenAI-compatible JSON/SSE | Configurable thinking/reasoning |
-| OpenRouter | OpenAI-compatible JSON/SSE | Provider routing, fallbacks and reasoning |
-| Custom | Configurable OpenAI-compatible endpoint | Custom request-body JSON and opt-in local HTTP |
+Settings → AI explanation (BYOK) offers **one provider: Custom (OpenAI-compatible)**, with every
+option of Yomitan BYOK's / Chimahon's Custom provider:
+
+| Setting | Request effect |
+|---|---|
+| Custom endpoint | Full chat-completions URL (OpenAI, OpenRouter, DeepSeek, Gemini's `/v1beta/openai/chat/completions`, a local server) |
+| Custom API key | `Authorization: Bearer …`; Keystore-encrypted, never shown again |
+| Custom model ID | `model` (required) |
+| OpenRouter provider routing + slugs + allow fallbacks | `provider.order/only/ignore`, `allow_fallbacks`; sent only when the endpoint host is OpenRouter |
+| Custom thinking mode / effort (Default, High, Max, Custom value) | OpenRouter `reasoning` (Max → `xhigh`; text → `effort`, number → `max_tokens`, JSON merged), else DeepSeek-style `thinking` / `reasoning_effort` |
+| Custom request body JSON | Deep-merged last over the generated body |
+| System prompt, prompt, temperature | `{{target}}`, `{{sentence}}`, `{{language}}` placeholders |
+| Generate on lookup (default on), Real time response, Cancel unfinished requests (default on), Use AI when no dictionary entry exists | Behaviour, as in Yomitan's `autoGenerateOnLookup`, `streamResponse`, `cancelPendingRequests`, `unknownWordFallback` |
+
+*Test connection* sends one tiny non-streaming request with the saved endpoint/model/key/options.
+Settings saved for the former OpenAI/Gemini/DeepSeek/OpenRouter choices are moved to Custom on
+first start (`AiSettingsStore.migrateToCustom`: same model and key, the provider's
+OpenAI-compatible URL). The request builder still has those adapters; only Custom is reachable.
+
+The explanation is shown **at the top of the lookup popup, above the dictionary entries**, like
+Yomitan's `#ai-explanation-top`: tinted card with an accent bar, selectable plain text with a
+blinking caret while streaming, ↻ (generate/regenerate) in the corner, Cancel, Copy, Try again.
+Its height is capped (170 dp, scrolls) so the definitions keep most of the popup.
 
 These protocols are covered by mock HTTP tests; no paid/live API calls are required or implied.
-OpenRouter fallback settings route providers within OpenRouter, not between unrelated accounts.
-Set API key, model and endpoint in Settings → AI explanations; prompts accept `{{target}}` and
-`{{sentence}}`. The target is the original selected surface, with the lemma only as a hint.
-AI is disabled by default. Explain/Regenerate sends word and context; automatic explanations
-require a separate opt-in. Unknown words show AI only when fallback is enabled and never gain a
-fake local dictionary entry. No screenshot is sent and AI text is not exported to Anki.
+The target is the original selected surface, with the lemma only as a hint. AI is disabled by
+default; nothing is sent until it is enabled and an endpoint, model and key are set. With
+*Cancel unfinished requests* off, an abandoned request finishes in the background into the cache
+(the popup's Cancel still cancels). Unknown words show AI only when fallback is enabled and never
+gain a fake local dictionary entry. No screenshot is sent and AI text is not exported to Anki.
 
 Keys use Android Keystore AES-GCM and an excluded secrets DataStore. HTTPS is required except
 explicitly acknowledged LAN/loopback HTTP. Certificate verification stays enabled; redirects

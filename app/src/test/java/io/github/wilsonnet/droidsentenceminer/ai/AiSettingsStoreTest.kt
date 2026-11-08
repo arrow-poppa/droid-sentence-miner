@@ -32,8 +32,11 @@ class AiSettingsStoreTest {
     @Test
     fun `defaults send nothing unprompted`() = blocking {
         val s = store().current()
+        // AI itself is off: automatic explanations (Yomitan's default) only start once it is enabled.
         assertFalse(s.enabled)
-        assertFalse(s.autoExplain)
+        assertTrue(s.autoExplain)
+        assertTrue(s.cancelPendingRequests)
+        assertEquals(AiProviderType.CUSTOM, s.provider)
         assertFalse(s.fallbackForUnknownWords)
         assertFalse(s.allowInsecureLocalEndpoint)
         assertEquals(AiSettings.DEFAULT_USER_PROMPT, s.userPrompt)
@@ -109,5 +112,26 @@ class AiSettingsStoreTest {
         store.clearAll()
         assertFalse(store.current().enabled)
         assertTrue(store.providersWithKey().isEmpty())
+    }
+
+    @Test
+    fun `settings saved for another provider move to Custom with their key`() = blocking {
+        val store = store()
+        store.update {
+            it.copy(provider = AiProviderType.OPENROUTER, providers = it.providers + (AiProviderType.OPENROUTER to ProviderSettings(model = "openai/gpt-4o-mini", routingMode = "only")))
+        }
+        store.setApiKey(AiProviderType.OPENROUTER, TEST_KEY)
+        store.migrateToCustom()
+        val s = store.current()
+        assertEquals(AiProviderType.CUSTOM, s.provider)
+        assertEquals("openai/gpt-4o-mini", s.current.model)
+        assertEquals(AiProviderType.OPENROUTER.defaultEndpoint, s.current.endpoint)
+        assertEquals("only", s.current.routingMode)
+        assertEquals(TEST_KEY, s.current.apiKey.value)
+        // Gemini keys go to its OpenAI-compatible endpoint, not the native models URL.
+        store.clearAll()
+        store.update { it.copy(provider = AiProviderType.GEMINI) }
+        store.migrateToCustom()
+        assertTrue(store.current().current.endpoint.endsWith("/openai/chat/completions"))
     }
 }

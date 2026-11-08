@@ -404,7 +404,7 @@ class AiExplanationServiceTest {
     @Test(timeout = 30_000)
     fun `automatic explanation honours the autoExplain setting`() {
         val server = srv { enqueue(jsonOk("auto")) }
-        val settings = FakeSettings(testSettings(endpoint = server.endpoint()))
+        val settings = FakeSettings(testSettings(endpoint = server.endpoint(), mutate = { it.copy(autoExplain = false) }))
         val svc = service(settings)
         assertEquals(listOf(AiExplanationState.Idle), svc.explainAutomatically(REQ).collectAll())
         assertEquals(0, server.requestCount)
@@ -493,6 +493,20 @@ class AiExplanationServiceTest {
             assertNull(svc.cached(REQ))
         }
         assertEquals(done("second"), last(svc.explain(REQ).collectAll()))
+    }
+
+    @Test(timeout = 30_000)
+    fun `with cancelPendingRequests off an abandoned request finishes into the cache`() {
+        val server = srv { enqueue(jsonOk("kept").setBodyDelay(400, TimeUnit.MILLISECONDS)) }
+        val svc = service(FakeSettings(testSettings(endpoint = server.endpoint(), mutate = { it.copy(cancelPendingRequests = false) })))
+        blocking {
+            val job = CoroutineScope(Dispatchers.IO).launch { svc.explain(REQ).collect { } }
+            server.takeRequest(5, TimeUnit.SECONDS)
+            job.cancelAndJoin()
+            delay(1200)
+            assertEquals(done("kept", cached = true), svc.cached(REQ))
+        }
+        assertEquals(1, server.requestCount)
     }
 
     // ---- cache ----

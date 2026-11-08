@@ -24,7 +24,8 @@ import okhttp3.OkHttpClient
  * "Explain"/"Regenerate" tap, [explainAutomatically] honours the `autoExplain` setting.
  *
  * - Collecting the returned flow is the request: cancelling the collector (popup closed, another
- *   word looked up) cancels the OkHttp call once no other collector is attached.
+ *   word looked up) cancels the OkHttp call once no other collector is attached, unless
+ *   `cancelPendingRequests` is off: then it finishes in the background into the cache.
  * - Identical concurrent requests share one in-flight call.
  * - `forceRefresh` bypasses the cache and replaces any in-flight call for the same request;
  *   collectors of the replaced call complete without a result, so an old answer never shows up
@@ -43,7 +44,7 @@ class AiExplanationService(
     private val lock = Any()
     private val inflight = HashMap<String, Inflight>()
 
-    private class Inflight(val key: String) {
+    private class Inflight(val key: String, val keepAlive: Boolean) {
         /** [AiExplanationState.Idle] doubles as "superseded": the collector ends without a result. */
         val state = MutableStateFlow<AiExplanationState>(AiExplanationState.Loading)
         var job: Job? = null
@@ -108,6 +109,42 @@ class AiExplanationService(
 
     fun clearCache() = cache.clear()
 
+    /**
+     * Settings → "Test connection": one tiny non-streaming request with the saved endpoint, model,
+     * key and options (but not the user's prompts), whether or not AI is switched on yet.
+     */
+    suspend fun testConnection(): AiExplanationState {
+        val saved = settings.current().copy(enabled = true)
+        if (!AiConfigCheck.isConfigured(saved)) return AiExplanationState.NotConfigured
+        val probe = saved.copy(streaming = false, systemPrompt = "", userPrompt = "Reply with the single word OK.")
+        return try {
+            AiExplanationState.Done(transport.run(probe, AiRequest("OK", "OK", null)) {}, fromCache = false)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: AiException) {
+            e.toState()
+        } catch (_: Exception) {
+            AiExplanationState.Error("The AI request failed unexpectedly.", retryable = true)
+        }
+    }
+
+    /** The user's Cancel: drops the in-flight call for [request] even when `cancelPendingRequests` is off. */
+    suspend fun cancel(request: AiRequest) {
+        val s = settings.current()
+        val key = try {
+            ExplanationCache.keyOf(AiRequestBuilder.build(s, request, stream = false), request)
+        } catch (_: AiException) {
+            return
+        }
+        val call = synchronized(lock) {
+            inflight.remove(key)?.also {
+                it.superseded = true
+                it.state.value = AiExplanationState.Idle
+            }
+        }
+        call?.job?.cancel()
+    }
+
     /** Cancels every in-flight request (e.g. when the overlay shuts down). */
     fun cancelAll() {
         val calls = synchronized(lock) { inflight.values.toList().also { inflight.clear() } }
@@ -127,7 +164,7 @@ class AiExplanationService(
             call = null
         }
         if (call == null) {
-            val created = Inflight(key)
+            val created = Inflight(key, keepAlive = !s.cancelPendingRequests)
             inflight[key] = created
             created.job = scope.launch { run(created, s, request) }
             call = created
@@ -140,7 +177,9 @@ class AiExplanationService(
         val cancel = synchronized(lock) {
             call.subscribers--
             val terminal = call.state.value.let { it is AiExplanationState.Done || it is AiExplanationState.Error }
-            if (call.subscribers <= 0 && !terminal) {
+            // keepAlive (cancelPendingRequests off): nobody reads it now, but it finishes into the
+            // cache, and reopening the same word attaches to it again instead of paying twice.
+            if (call.subscribers <= 0 && !terminal && !call.keepAlive) {
                 if (inflight[call.key] === call) inflight.remove(call.key)
                 call.superseded = true
                 true

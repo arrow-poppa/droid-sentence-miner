@@ -114,8 +114,23 @@ open class MlKitOcr(
             box = BoundingBox.from(box),
             confidence = line.confidence,
             angle = line.angle,
-            chars = line.elements.flatMap { it.symbols }.mapNotNull { it.boundingBox?.let(BoundingBox::from) },
+            chars = if (profile.isJapanese) {
+                // Unchanged for Japanese: book mode and the layer match these against the cleaned text.
+                line.elements.flatMap { it.symbols }.mapNotNull { it.boundingBox?.let(BoundingBox::from) }
+            } else {
+                alignedChars(line, BoundingBox.from(box))
+            },
         )
+    }
+
+    /** One box per character of the line's text, spaces included ([OcrGeometry.alignChars]). */
+    private fun alignedChars(line: Text.Line, lineBox: BoundingBox): List<BoundingBox>? {
+        val words = line.elements.mapNotNull { element ->
+            val box = element.boundingBox ?: return@mapNotNull null
+            val symbols = element.symbols.mapNotNull { s -> s.boundingBox?.let { s.text to BoundingBox.from(it) } }
+            OcrGeometry.WordBoxes(element.text, BoundingBox.from(box), symbols.takeIf { it.size == element.symbols.size }.orEmpty())
+        }
+        return OcrGeometry.alignChars(line.text, words, lineBox)
     }
 
     /**

@@ -68,7 +68,15 @@ object ScreenText {
             val text = if (profile.isJapanese) PageLayout.clean(line.text) else line.text.trim()
             if (text.isEmpty() || profile.count(text) == 0) return@mapNotNull null
             val vertical = profile.allowsVertical && line.box.height > line.box.width * 1.3f && text.length >= 2
-            var glyphs = PageLayout.glyphsOf(line, text, vertical)
+            // Per-character boxes of the raw text lose their alignment when trim() drops leading blanks.
+            val rawChars = line.chars
+            val source = if (!profile.isJapanese && rawChars != null && rawChars.size == line.text.length && text.length != line.text.length) {
+                val lead = line.text.length - line.text.trimStart().length
+                line.copy(chars = rawChars.subList(lead, lead + text.length))
+            } else {
+                line
+            }
+            var glyphs = PageLayout.glyphsOf(source, text, vertical)
             // Evenly split boxes run left to right; an RTL line's first (logical) character is drawn rightmost.
             if (profile.rightToLeft && line.chars?.size != text.length) glyphs = glyphs.reversed()
             ScreenTextLine(text, glyphs.map(::frac), areaIndex, line.confidence)
@@ -84,12 +92,16 @@ object ScreenText {
         return (w.toLong() * h).toFloat() / smaller
     }
 
-    /** The character at screen fraction ([x], [y]) as (line, index), within [slack] (fraction of width). */
+    /**
+     * The character at screen fraction ([x], [y]) as (line, index), within [slack] (fraction of width).
+     * Blanks are never hit: a tap between two words goes to the nearer word, not to the space.
+     */
     fun glyphAt(lines: List<ScreenTextLine>, x: Float, y: Float, slackX: Float = 0f, slackY: Float = 0f): Pair<Int, Int>? {
         var best: Pair<Int, Int>? = null
         var bestDistance = Float.MAX_VALUE
         lines.forEachIndexed { l, line ->
             line.glyphs.forEachIndexed { i, g ->
+                if (line.text.getOrNull(i)?.isWhitespace() == true) return@forEachIndexed
                 if (x < g.left - slackX || x > g.right + slackX || y < g.top - slackY || y > g.bottom + slackY) return@forEachIndexed
                 val d = (g.centerX - x) * (g.centerX - x) + (g.centerY - y) * (g.centerY - y)
                 if (d < bestDistance) {

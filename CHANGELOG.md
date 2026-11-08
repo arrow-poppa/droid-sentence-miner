@@ -10,9 +10,14 @@ versions are the `v*` tags that publish a signed APK on
 - Independent study-language, OCR engine and script/model settings; all five ML Kit script recognizers and an official language catalog.
 - On-demand, checksum-verified PaddleOCR ONNX models for Latin, Chinese/Japanese, Cyrillic, Arabic, Greek and Korean (Android inference validation pending).
 - Language-aware dictionary selection and morphology, including English irregulars, phrasal verbs and dictionary-validated hyphenated compounds; original text offsets are retained.
-- Optional BYOK explanations in lookup popups: OpenAI, Gemini, DeepSeek, OpenRouter and custom compatible endpoints, streaming, cancellation, cache and encrypted API keys.
+- Optional BYOK explanations in lookup popups through one Custom OpenAI-compatible provider (endpoint, key, model, OpenRouter routing/fallbacks, thinking mode/effort, request body JSON, test connection), streaming, cancellation, cache and encrypted API keys.
+
+### Changed
+- The AI explanation sits at the top of the lookup popup, above the dictionary entries, in Yomitan's style (accent bar, ↻ regenerate, streaming caret, Copy); generates on lookup by default once AI is enabled.
+- AI settings offer only the Custom provider, with all of its options; settings saved for OpenAI/Gemini/DeepSeek/OpenRouter move to it. New *Cancel unfinished requests* option.
 
 ### Fixed
+- Screen dictionary taps on Latin/Cyrillic/Korean text with spaces land on the word under the finger: ML Kit lines get one box per character including spaces (they used to be split evenly), a tap on a space goes to the nearer word, and drags ignore edge blanks.
 - Wrapped sentences in space-delimited languages retain word boundaries in the text log and shared-text mining.
 - Auto OCR reloads language/engine changes during an active session and reports recognition failures.
 - Custom word-audio URLs remain available for non-Japanese study; Japanese providers receive only Japanese study lookups.

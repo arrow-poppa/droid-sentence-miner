@@ -21,6 +21,7 @@ import io.github.wilsonnet.droidsentenceminer.textlog.TextLogDatabase
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 
@@ -49,7 +50,12 @@ class AppContainer(private val context: Context) {
     val db: DictDatabase by lazy { DictDatabase.build(context) }
     val prefs: DsmPrefs by lazy { DsmPrefs(context) }
     val lookup: TermLookup by lazy { TermLookup(db) }
-    val aiSettings by lazy { io.github.wilsonnet.droidsentenceminer.ai.AiSettingsStore(context) }
+    val aiSettings by lazy {
+        io.github.wilsonnet.droidsentenceminer.ai.AiSettingsStore(context).also { store ->
+            // Only the Custom provider is offered now; settings saved for another one move to it.
+            appScope.launch { runCatching { store.migrateToCustom() } }
+        }
+    }
     val aiExplanations by lazy { io.github.wilsonnet.droidsentenceminer.ai.AiExplanationService(aiSettings) }
 
     suspend fun scanText(text: String) = lookup.scan(text, language = prefs.studyLanguage.first())

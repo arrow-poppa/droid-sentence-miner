@@ -163,6 +163,17 @@ See `.opencode/skills/dsm-debug-api/SKILL.md` for the full reference and recipes
   to the input crop. `AppContainer` passes the study language to scan/tap/lookup; parser candidates
   never replace source spans. Keep `ScreenTextLine.confidence` null when unreported. See
   `docs/multilingual.md` and `docs/integration-state.md` for current validation limits.
+- **ML Kit char boxes vs. spaces** (`OcrGeometry.alignChars`, `MlKitOcr.alignedChars`): ML Kit
+  reports symbols only for word characters, so flattening them gives fewer boxes than a spaced
+  line's text and `PageLayout.glyphsOf` fell back to an even split — taps on proportional Latin
+  text landed on the neighbouring word. Non-Japanese profiles now get one box per UTF-16 unit
+  (gaps shared by the characters between words); Japanese keeps the flat symbol list (book mode
+  and `PageLayout.clean` rely on it). Taps never hit a blank glyph (`ScreenText.glyphAt`, layer view).
+- **AI explanation = Yomitan's top box, Custom provider only** (`AiExplanationSection`,
+  `AiSettingsScreen`): rendered above `LookupBody` in both popups, height-capped. Settings expose
+  only `AiProviderType.CUSTOM`; `AiSettingsStore.migrateToCustom` moves older provider settings.
+  `cancelPendingRequests` off keeps abandoned calls running into the cache (`Inflight.keepAlive`);
+  the popup's Cancel always cancels (`AiExplanationService.cancel`).
 
 
 - **Auto OCR / text log / replay buffer** (GSM model): `AutoOcrController` polls new frames,
@@ -558,7 +569,7 @@ See `.opencode/skills/dsm-debug-api/SKILL.md` for the full reference and recipes
 
 ```
 app/src/main/java/io/github/wilsonnet/droidsentenceminer/
-├── ai/        BYOK providers, encrypted credentials, streaming and bounded explanation cache
+├── ai/        BYOK Custom (OpenAI-compatible) provider, encrypted credentials, streaming and bounded explanation cache
 ├── dict/      Yomitan import, Room storage, language parsers, lookup, glossary rendering
 ├── ocr/       meikiocr (ONNX) + ML Kit engines, preprocessing, GSM-style post-processing
 ├── capture/   MediaProjection capture, auto OCR loop, text areas

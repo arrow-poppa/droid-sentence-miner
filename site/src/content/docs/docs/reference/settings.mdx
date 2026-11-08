@@ -35,15 +35,19 @@ button or gesture returns to the list.
 
 ## AI explanations (multilingual development branch)
 
-AI is off by default. Bring your own key for OpenAI, Gemini, DeepSeek, OpenRouter or a custom
-OpenAI-compatible endpoint. Configure model, endpoint, prompts, temperature, streaming and
-provider-specific thinking/routing options here. Keys are encrypted using Android Keystore
-and excluded from backups.
+AI is off by default. Bring your own key through one **Custom (OpenAI-compatible)** provider:
+endpoint (any chat-completions URL: OpenAI, OpenRouter, DeepSeek, Gemini's OpenAI endpoint, a
+local server), API key, model ID, OpenRouter provider routing/slugs/fallbacks, thinking mode and
+effort, and a custom request-body JSON. Then the prompts, temperature and behaviour: *Generate on
+lookup*, *Real time response*, *Cancel unfinished requests* and *Use AI when no dictionary entry
+exists*. *Test connection* checks the saved setup. Keys are encrypted using Android Keystore and
+excluded from backups.
 
-When you tap **Explain** in a lookup, the selected original word and sentence go to that provider.
-**Regenerate** retries, **Cancel** stops the request, and closing/changing the lookup cancels its
-collection. Automatic explanations and AI fallback for unknown words each require opt-in.
-Dictionary results remain available without AI. AI text is not exported to Anki.
+Once enabled, the explanation appears at the **top of the lookup popup, above the dictionary
+entries**, as in Yomitan: the selected original word and its sentence go to your endpoint. **↻**
+regenerates, **Cancel** stops the request, and closing/changing the lookup cancels it (unless
+*Cancel unfinished requests* is off). Dictionary results remain available without AI. AI text is
+not exported to Anki.
 
 These additions still need physical-device validation; build/test evidence is recorded in the
 repository's `docs/integration-state.md` and `docs/multilingual.md`.

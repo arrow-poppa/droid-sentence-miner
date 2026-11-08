@@ -564,8 +564,9 @@ fun WordLookupDialog(
         text = {
             // No verticalScroll here: the WebView scrolls itself, and an outer scroll fought it for drags.
             Column(Modifier.heightIn(max = 420.dp)) {
-                LookupBody(state, dark, maxHeight = 360.dp, onTextTap = onTap, onEntryMine = { mine(it, null) }, onEntryEdit = edit)
+                // Above the entries, as in Yomitan's popup.
                 LookupAiExplanation(entry.word, entry.sentence, state.details, state.loading)
+                LookupBody(state, dark, maxHeight = 360.dp, onTextTap = onTap, onEntryMine = { mine(it, null) }, onEntryEdit = edit)
                 state.status?.let {
                     Spacer(Modifier.size(8.dp))
                     Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
@@ -714,10 +715,12 @@ fun WordLookupCard(
             // The rest of the card, whatever the header took: a fixed guess for the header clipped the
             // bottom of the definition when the header was taller (deinflection line, error, back).
             Column(Modifier.weight(1f, fill = false).padding(end = 8.dp)) {
+                // The AI explanation sits above the dictionary entries, as in Yomitan's popup; its
+                // own height is capped so the definitions below always keep most of the card.
+                LookupAiExplanation(entry.word, entry.sentence, state.details, state.loading)
                 Box(Modifier.weight(1f, fill = false)) {
                     LookupBody(state, dark, maxHeight = maxHeight, onTextTap = onTap, onEntryMine = { mine(it, null) }, onEntryEdit = edit)
                 }
-                LookupAiExplanation(entry.word, entry.sentence, state.details, state.loading)
             }
         }
     }

@@ -18,9 +18,8 @@ All three are GPL-3.0, as is DSM. Keep attribution comments on ported files.
 
 ## Ownership
 
-Codex integrates the existing OCR commit and recovered parser/BYOK work directly in the main
-implementation checkout. Source worker worktrees are preserved. No additional agents are needed.
-The prior Claude session reached its usage limit; do not assume an active review or handoff.
+Work happens directly in the main implementation checkout. No Paseo orchestration; native
+subagents only when needed. PRs carry no personal name or email.
 
 ## Contracts
 
@@ -40,6 +39,10 @@ The prior Claude session reached its usage limit; do not assume an active review
   are implemented. Physical Android recognition, delivery and geometry remain unverified.
 - M4: recovered parser and behavioral tests integrated; app scan/tap/lookup/mining paths pass
   study language. Wrapped non-Japanese rows retain word boundaries in the tracker/shared-text mining.
+- Overlay/AI follow-up (2026-11-08): ML Kit per-character boxes include spaces for
+  non-Japanese profiles (taps hit the word under the finger), AI box moved above the dictionary
+  entries in Yomitan's style, settings reduced to the Custom provider with all its options plus
+  *Cancel unfinished requests* and *Test connection*. CI result: see the commit's run.
 - M5: recovered BYOK core/UI/tests integrated, native popup/settings and secure secrets storage.
   Mock HTTP tests pass; live APIs, Android Keystore and popup/device behavior are not verified.
 - M6: NCNN FP16 and secondary OCR engines are not implemented; assessment and limits are in
