@@ -42,7 +42,9 @@ subagents only when needed. PRs carry no personal name or email.
 - Overlay/AI follow-up (2026-11-08): ML Kit per-character boxes include spaces for
   non-Japanese profiles (taps hit the word under the finger), AI box moved above the dictionary
   entries in Yomitan's style, settings reduced to the Custom provider with all its options plus
-  *Cancel unfinished requests* and *Test connection*. CI result: see the commit's run.
+  *Cancel unfinished requests* and *Test connection*. `daf4ef7`, CI run
+  [42444059387](https://github.com/arrow-poppa/droid-sentence-miner/actions/runs/42444059387):
+  **397 tests, 0 failures/errors/skipped**; debug APK built. Not yet checked on a device.
 - M5: recovered BYOK core/UI/tests integrated, native popup/settings and secure secrets storage.
   Mock HTTP tests pass; live APIs, Android Keystore and popup/device behavior are not verified.
 - M6: NCNN FP16 and secondary OCR engines are not implemented; assessment and limits are in
