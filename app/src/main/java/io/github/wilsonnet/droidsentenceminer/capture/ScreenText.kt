@@ -12,6 +12,8 @@ data class FracRect(val left: Float, val top: Float, val right: Float, val botto
     val centerY: Float get() = (top + bottom) / 2f
 
     fun union(o: FracRect) = FracRect(minOf(left, o.left), minOf(top, o.top), maxOf(right, o.right), maxOf(bottom, o.bottom))
+
+    fun overlaps(o: FracRect) = left < o.right && o.left < right && top < o.bottom && o.top < bottom
 }
 
 /** One line of on-screen text with where each of its characters is drawn. */

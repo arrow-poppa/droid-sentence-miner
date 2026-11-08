@@ -21,6 +21,7 @@ versions are the `v*` tags that publish a signed APK on
 - AI settings offer only the Custom provider, with all of its options; settings saved for OpenAI/Gemini/DeepSeek/OpenRouter move to it. New *Cancel unfinished requests* option.
 
 ### Fixed
+- The screen-dictionary popup closed by itself: its tap re-check read the popup's own definition as screen text (full-screen areas) and put tap layers over it, and closed it whenever the re-read lost the word (e.g. player controls shown by the pause). Text under the popup is ignored now and the popup stays open.
 - Long AI explanations were cut off in the popup: the box is now part of the definition page and scrolls with it.
 - Screen dictionary taps on Latin/Cyrillic/Korean text with spaces land on the word under the finger: ML Kit lines get one box per character including spaces (they used to be split evenly), a tap on a space goes to the nearer word, and drags ignore edge blanks.
 - Wrapped sentences in space-delimited languages retain word boundaries in the text log and shared-text mining.

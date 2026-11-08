@@ -36,4 +36,14 @@ class ScreenTextTest {
         assertEquals(listOf("行こう"), lines.map { it.text })
         assertEquals(3, lines.single().glyphs.size) // no symbol boxes: split evenly
     }
+
+    @Test
+    fun `frac rects overlap only when their areas intersect`() {
+        val popup = FracRect(0.1f, 0.5f, 0.6f, 0.9f)
+        assertEquals(true, FracRect(0.2f, 0.6f, 0.3f, 0.65f).overlaps(popup))
+        assertEquals(true, FracRect(0.0f, 0.45f, 0.2f, 0.55f).overlaps(popup))
+        // Touching edges (the word right above the popup) is not overlapping.
+        assertEquals(false, FracRect(0.1f, 0.4f, 0.6f, 0.5f).overlaps(popup))
+        assertEquals(false, FracRect(0.7f, 0.6f, 0.9f, 0.7f).overlaps(popup))
+    }
 }

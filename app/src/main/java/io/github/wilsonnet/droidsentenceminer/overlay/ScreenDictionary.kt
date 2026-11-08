@@ -26,6 +26,7 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import io.github.wilsonnet.droidsentenceminer.AppContainer
+import io.github.wilsonnet.droidsentenceminer.capture.FracRect
 import io.github.wilsonnet.droidsentenceminer.capture.ScreenCaptureManager
 import io.github.wilsonnet.droidsentenceminer.capture.ScreenText
 import io.github.wilsonnet.droidsentenceminer.capture.ScreenTextLine
@@ -63,6 +64,7 @@ class ScreenDictionary(
     private var lines: List<ScreenTextLine> = emptyList()
 
     private var popup: ComposeView? = null
+    private var popupParams: WindowManager.LayoutParams? = null
     private var popupOwner: OverlayLifecycleOwner? = null
     private val handler = Handler(Looper.getMainLooper())
     private var pausedMedia = false
@@ -175,14 +177,23 @@ class ScreenDictionary(
             show(line, range)
             if (quickActive) return@launch // read from a fresh frame just now, and auto OCR's areas are elsewhere
             delay(VERIFY_DELAY_MS) // let the pause take effect so the frame is the one being looked at
-            // An empty read may just be a miss; only a read that sees other text overrides the tap.
-            val fresh = refresh()?.takeIf { it.isNotEmpty() } ?: return@launch
+            // The re-read frame has the popup in it: with an area over the whole screen its definition
+            // text came back as "screen lines", and their layer windows (added after the popup, so
+            // above it) caught taps meant for the popup and closed it. Lines under the popup are not
+            // screen text.
+            val covered = popupArea()
+            val fresh = refresh()
+                ?.filterNot { covered != null && it.bounds.overlaps(covered) }
+                // An empty read may just be a miss; only a read that sees other text overrides the tap.
+                ?.takeIf { it.isNotEmpty() } ?: return@launch
             if (seq != tapSeq || !popupOpen) return@launch
             val hit = ScreenText.glyphAt(fresh, glyph.centerX, glyph.centerY)
             if (hit == null) {
-                // The subtitle changed and there is no text under the finger any more.
-                dismiss()
-                setLayer(fresh)
+                // Nothing under the finger in the re-read. That used to close the popup ("the subtitle
+                // changed"), but the player's controls appearing on pause, the popup itself or a
+                // different read of the same frame lose the word just as well, and the popup seemed
+                // to close at random. Keep it: a stale definition is one tap away from going.
+                android.util.Log.i("DSM-ScreenDict", "tap verify: word not in the re-read, popup kept")
                 return@launch
             }
             val (freshLine, freshIndex) = hit
@@ -321,9 +332,21 @@ class ScreenDictionary(
             }
         }
         popup = view
+        popupParams = params
         popupOwner = owner
         handler.removeCallbacks(clearQuick)
         runCatching { windowManager.addView(view, params) }
+    }
+
+    /** Where the popup is on screen, in screen fractions (null before it was laid out). */
+    private fun popupArea(): FracRect? {
+        val view = popup ?: return null
+        val params = popupParams ?: return null
+        if (view.width == 0 || view.height == 0) return null
+        val metrics = ScreenCaptureManager.screenMetrics(context)
+        val w = metrics.widthPixels.toFloat()
+        val h = metrics.heightPixels.toFloat()
+        return FracRect(params.x / w, params.y / h, (params.x + view.width) / w, (params.y + view.height) / h)
     }
 
     /**
@@ -333,6 +356,7 @@ class ScreenDictionary(
     fun dismiss(resumeLater: Boolean = false) {
         val view = popup ?: return
         popup = null
+        popupParams = null
         runCatching { windowManager.removeView(view) }
         popupOwner?.onDestroy()
         popupOwner = null

@@ -436,8 +436,11 @@ See `.opencode/skills/dsm-debug-api/SKILL.md` for the full reference and recipes
   column ≤840 dp (`ReadableWidth`); cards are `fillMaxWidth` so they don't shrink to their content.
 - **Tap verify** (`ScreenDictionary.lookupFrom`): the popup opens at once from the layer (up to one
   auto OCR interval old), then 250 ms later `AutoOcrController.readNow()` reads the paused frame;
-  if the word under the finger changed (rolling captions) the popup moves to it, if the read sees
-  other text but nothing there it closes, an empty read changes nothing.
+  if the word under the finger changed (rolling captions) the popup moves to it; nothing there or
+  an empty read changes nothing. Lines under the popup are dropped from that read
+  (`popupArea`): with a full-screen area the frame contains the popup, its definition became
+  "screen lines" whose layer windows (added later, so above the popup) ate taps on it → ACTION_OUTSIDE
+  → closed. Closing when the word was gone also fired on player controls shown by the pause.
 - **Clip end while paused**: an open line has no `endMs`, so its clip used to run to "now" (30 s
   max) when mined from a lookup popup with the video paused. `TextLog.openLinePausedAtMs` (set when
   auto OCR pauses) ends it there. `SubtitleLineFilter.dropUnsure` drops engine lines <0.5 confidence
