@@ -37,6 +37,8 @@ Everything the app does, in detail. The short version is in the [README](../READ
   back (auto OCR pauses there, since it would cover the game). Size and position are remembered
   per orientation (a big portrait window would cover a landscape video), and so is the mode;
   fullscreen always reopens as the normal window.
+  It and the bubble are hidden from screen capture by default (`FLAG_SECURE`, *Hide DSM windows
+  from OCR*), so an auto OCR area over the whole screen never reads them.
 - **App focus** — share "A single app" (Android 14+) and pick the game: only it is read, and
   auto OCR pauses while you are in other apps or in Droid Sentence Miner itself.
 - **Book mode (paper books, manga)** — the *Book* tab takes a photo with Samsung Camera on Galaxy

@@ -31,6 +31,9 @@ button or gesture returns to the list.
 - **Two-pass OCR (ML Kit)** — optionally re-read detected lines at higher resolution.
 - **Filter non-study-language lines** — remove background UI noise using the chosen text profile.
 - **Live text window** — show the floating feed of new lines while auto OCR runs.
+- **Hide DSM windows from OCR** (on by default) — the live text window and the bubble are
+  `FLAG_SECURE`, so screen capture sees them black and a full-screen auto OCR area doesn't read
+  them. Your own screenshots/recordings show them black too.
 - **Tap text on screen to look it up** — the invisible screen dictionary layer.
 - **Pause the video while looking up** — media-key pause/resume around a lookup.
 - **Auto OCR interval** — 200–2000 ms (default 400 ms). Lower catches short lines sooner; higher

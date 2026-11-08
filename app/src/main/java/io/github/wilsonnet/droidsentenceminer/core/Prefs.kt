@@ -62,6 +62,7 @@ class DsmPrefs(private val context: Context) {
         val autoAreasPortrait = stringPreferencesKey("auto_areas_portrait")
         val autoAreasLandscape = stringPreferencesKey("auto_areas_landscape")
         val liveTextWindow = booleanPreferencesKey("live_text_window")
+        val hideOverlaysFromCapture = booleanPreferencesKey("hide_overlays_from_capture")
         val screenDictionary = booleanPreferencesKey("screen_dictionary")
         val bubbleMode = stringPreferencesKey("bubble_mode")
         val pauseOnLookup = booleanPreferencesKey("pause_on_lookup")
@@ -186,6 +187,13 @@ class DsmPrefs(private val context: Context) {
     }
 
     suspend fun setLiveTextWindow(value: Boolean) = edit { it[Keys.liveTextWindow] = value }
+
+    /**
+     * DSM's own floating windows (live text window, bubble) are `FLAG_SECURE`: screen capture and
+     * screenshots see them black, so a full-screen auto OCR area never reads (and logs) them.
+     */
+    val hideOverlaysFromCapture: Flow<Boolean> = context.dataStore.data.map { it[Keys.hideOverlaysFromCapture] ?: true }
+    suspend fun setHideOverlaysFromCapture(value: Boolean) = edit { it[Keys.hideOverlaysFromCapture] = value }
 
     /** Tap the real on-screen text (over any app) to look it up while auto OCR runs. */
     val screenDictionary: Flow<Boolean> = context.dataStore.data.map { it[Keys.screenDictionary] ?: true }

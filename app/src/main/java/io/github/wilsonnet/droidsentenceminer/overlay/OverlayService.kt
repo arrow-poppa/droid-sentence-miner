@@ -84,6 +84,9 @@ class OverlayService : Service() {
     private var liveView: ComposeView? = null
     private var liveOwner: OverlayLifecycleOwner? = null
     private var liveParams: WindowManager.LayoutParams? = null
+
+    /** [DsmPrefs.hideOverlaysFromCapture]: our floating windows are FLAG_SECURE (black to capture). */
+    private var hideFromCapture = true
     private var liveDismissed = false
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private val liveMode = androidx.compose.runtime.mutableStateOf(LiveMode.NORMAL)
@@ -124,6 +127,17 @@ class OverlayService : Service() {
         }
 
         screenDictionary = ScreenDictionary(this, windowManager, scope, container)
+        scope.launch {
+            container.prefs.hideOverlaysFromCapture.collect { hide ->
+                hideFromCapture = hide
+                listOf(liveView to liveParams, bubbleView to bubbleParams).forEach { (view, params) ->
+                    if (view != null && params != null && view.isAttachedToWindow) {
+                        secureFromCapture(params)
+                        runCatching { windowManager.updateViewLayout(view, params) }
+                    }
+                }
+            }
+        }
         autoOcr = AutoOcrController(
             scope,
             captureManager,
@@ -327,6 +341,7 @@ class OverlayService : Service() {
             )
             bubbleView = view
             bubbleParams = params
+            secureFromCapture(params)
             runCatching { windowManager.addView(view, params) }
             bubbleHidden = false
         }
@@ -689,6 +704,19 @@ class OverlayService : Service() {
 
     // ------------------------------------------------------------ live text
 
+    /**
+     * Android's version of excluding a window from capture (Windows' `WDA_EXCLUDEFROMCAPTURE`):
+     * a FLAG_SECURE window is drawn black into MediaProjection frames and screenshots (including
+     * the accessibility one), so auto OCR over the whole screen doesn't read our own text back.
+     */
+    private fun secureFromCapture(params: WindowManager.LayoutParams) {
+        params.flags = if (hideFromCapture) {
+            params.flags or WindowManager.LayoutParams.FLAG_SECURE
+        } else {
+            params.flags and WindowManager.LayoutParams.FLAG_SECURE.inv()
+        }
+    }
+
     private fun showLiveWindow() {
         if (liveView != null || liveDismissed || !Settings.canDrawOverlays(this)) return
         val owner = OverlayLifecycleOwner().apply {
@@ -762,6 +790,7 @@ class OverlayService : Service() {
                 ?.takeIf { it != LiveMode.FULLSCREEN }
                 ?: LiveMode.NORMAL
             applyLiveMode(params)
+            secureFromCapture(params)
             runCatching { windowManager.addView(view, params) }
         }
     }

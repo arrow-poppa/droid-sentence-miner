@@ -35,6 +35,8 @@ $ADB shell settings put global sysui_demo_allowed 1
 for c in "enter" "clock -e hhmm 1200" "battery -e level 100 -e plugged false" "notifications -e visible false"; do
   $ADB shell am broadcast -a com.android.systemui.demo -e command $c; done
 curl -s localhost:9099/stopoverlay      # no bubble / live window over app screens
+# The live window and bubble are FLAG_SECURE by default (black in screenshots/recordings):
+# turn off Settings → Hide DSM windows from OCR before capturing them.
 # ... navigate, then: $ADB exec-out screencap -p > shot.png
 # Reset (do not skip)
 $ADB shell wm size reset; $ADB shell wm density reset
