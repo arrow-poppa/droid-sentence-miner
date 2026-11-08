@@ -97,6 +97,104 @@ class MultilingualLookupTest {
     // --- Hyphenated compounds, word boundaries ---------------------------------------------------
 
     @Test
+    fun `open-source selects and scans as one surface for every compound spelling`() {
+        for (surface in listOf("open-source", "open‐source", "open‑source", "Open‑Source")) {
+            for (headword in listOf("open-source", "open source", "opensource")) {
+                val l = lookup(store(Row(1, "open"), Row(1, "source"), Row(1, headword)))
+                val text = "🙂 an $surface tool"
+                val start = text.indexOf(surface)
+                val end = start + surface.length
+                // Either half and the hyphen itself resolve to the same original surface.
+                for (tap in listOf(start, start + 4, end - 1)) {
+                    val selection = l.select(text, tap, "en")
+                    assertEquals(surface, selection.surface)
+                    assertEquals(start, selection.start)
+                    assertEquals(end, selection.end)
+                    assertEquals(text.substring(selection.start, selection.end), selection.surface)
+                    assertEquals(headword, l.details(selection.surface, "en").terms.first().expression)
+                }
+                val scanned = runBlocking { l.scan(text, language = "en") }
+                assertEquals(listOf(surface), scanned.map { it.text })
+                assertEquals(start, scanned.single().start)
+                assertEquals(end, scanned.single().end)
+                assertEquals(headword, scanned.single().results.first().expression)
+            }
+        }
+    }
+
+    @Test
+    fun `state-of-the-art covers all parts with spaced or joined dictionary spellings`() {
+        val surface = "state-of-the-art"
+        val text = "a $surface phone"
+        for (headword in listOf(surface, "state of the art", "stateoftheart")) {
+            val l = lookup(
+                store(Row(1, "state"), Row(1, "of"), Row(1, "the"), Row(1, "art"), Row(1, headword)),
+            )
+            for (part in listOf("state", "of", "the", "art")) {
+                assertEquals(surface, l.range(text, text.indexOf(part), "en").of(text))
+            }
+            val scanned = runBlocking { l.scan(text, language = "en") }
+            assertEquals(listOf(surface), scanned.map { it.text })
+            assertEquals(headword, scanned.single().results.first().expression)
+        }
+    }
+
+    @Test
+    fun `compound results rank original spelling before spaces before joined forms`() {
+        val l = lookup(
+            store(
+                Row(1, "opensource", score = 100), Row(1, "open source", score = 50),
+                Row(1, "open-source", score = -5), Row(1, "open‑source", score = -10),
+            ),
+        )
+        assertEquals(
+            listOf("open-source", "open source", "opensource"),
+            l.details("open-source", "en").terms.map { it.expression },
+        )
+        val expected = listOf("open‑source", "open-source", "open source", "opensource")
+        assertEquals(expected, l.details("open‑source", "en").terms.map { it.expression })
+        val scanned = runBlocking { l.scan("open‑source", language = "en") }
+        assertEquals(expected, scanned.single().results.map { it.expression })
+    }
+
+    @Test
+    fun `unknown compounds fall back to the part under the finger and scan the parts`() {
+        val l = lookup(store(Row(1, "open"), Row(1, "source")))
+        for (surface in listOf("open-source", "open‐source", "open‑source")) {
+            val text = "an $surface tool"
+            for (part in listOf("open", "source")) {
+                val start = text.indexOf(part)
+                val selection = l.select(text, start + 1, "en")
+                assertEquals(part, selection.surface)
+                assertEquals(start, selection.start)
+                assertEquals(start + part.length, selection.end)
+            }
+            val scanned = runBlocking { l.scan(text, language = "en") }
+            assertEquals(listOf("open", "source"), scanned.map { it.text })
+            assertEquals(listOf(text.indexOf("open"), text.indexOf("source")), scanned.map { it.start })
+        }
+        // A known phrase ending before the hyphen cannot cover a tap on the hyphen itself.
+        val prefix = lookup(store(Row(1, "an open"), Row(1, "source")))
+        assertEquals("-", prefix.range("an open-source", 7, "en").of("an open-source"))
+    }
+
+    @Test
+    fun `punctuation dashes and edge hyphens do not select compounds`() {
+        val l = lookup(store(Row(1, "word"), Row(1, "word-word"), Row(1, "word word"), Row(1, "wordword")))
+        for (text in listOf("word — word", "word – word", "word - word", "word--word", "-word-")) {
+            for ((i, c) in text.withIndex()) {
+                if (c.isLetter()) {
+                    assertEquals("word", l.range(text, i, "en").of(text))
+                } else {
+                    assertEquals(c.toString(), l.range(text, i, "en").of(text))
+                }
+            }
+            val scanned = runBlocking { l.scan(text, language = "en") }
+            assertEquals(if (text == "-word-") listOf("word") else listOf("word", "word"), scanned.map { it.text })
+        }
+    }
+
+    @Test
     fun `hyphenated compounds need a dictionary match that covers the tap`() {
         val text = "the gaming-mode switch"
         val tapMode = text.indexOf("mode")

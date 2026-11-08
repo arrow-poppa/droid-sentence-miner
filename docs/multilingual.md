@@ -53,6 +53,16 @@ NCNN and secondary OCR services are not implemented or listed as working engines
 A generated candidate becomes a lemma only after a dictionary match. POS-less dictionaries
 accept deinflections only when the dictionary has no POS rules anywhere; tagged dictionaries
 keep grammatical filtering. Compound selection must cover the tap and match a dictionary.
+
+English hyphenated spans (`-`, U+2010 `‐`, U+2011 `‑`) query the original spelling first, then
+hyphen-normalized/case-folded spellings, space-separated and joined spellings (`open-source` →
+`open source` → `opensource`). All parts of `state-of-the-art` are handled the same way.
+Taps on either part or an internal hyphen and line scans retain the complete matched source span;
+only when no compound matches do taps/scans fall back to individual parts. En/em dashes, spaced
+hyphens and leading/trailing hyphens remain punctuation. Expression probing retains its limits of
+five words and 48 UTF-16 units. Spelling rank precedes dictionary priority/score, so joined forms
+cannot outrank the original or space-separated spelling. These follow-up JVM cases await CI.
+
 Dictionary writes invalidate caches, including POS availability after same-size reimports.
 Text logging joins wrapped rows with spaces for space-delimited profiles; Japanese retains its
 existing wrap-joining behavior.

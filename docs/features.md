@@ -4,7 +4,9 @@
 
 ## Multilingual implementation branch
 
-The implementation branch adds multilingual OCR, language-aware lookup and optional BYOK explanations. See [multilingual support and limitations](multilingual.md).
+The implementation branch adds multilingual OCR, language-aware lookup and optional BYOK explanations.
+English hyphenated words stay whole when a dictionary matches their hyphenated, space-separated,
+or joined spelling; taps and scans keep the original text and offsets. See [multilingual support and limitations](multilingual.md).
 
 Everything the app does, in detail. The short version is in the [README](../README.md).
 

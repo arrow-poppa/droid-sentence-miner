@@ -167,6 +167,10 @@ See `.opencode/skills/dsm-debug-api/SKILL.md` for the full reference and recipes
   to the input crop. `AppContainer` passes the study language to scan/tap/lookup; parser candidates
   never replace source spans. Keep `ScreenTextLine.confidence` null when unreported. See
   `docs/multilingual.md` and `docs/integration-state.md` for current validation limits.
+- **English hyphenated lookup** (`WordSpans`, `Parsers.englishHyphenVariants`, `MultilingualEngine`):
+  probes retain original hyphens; candidates and results rank hyphenated → spaced → joined
+  spellings via `normalizationOrder`. Keep that rank before headword shape/priority/score, and
+  require the matched span to cover the tap (including a tap on an internal hyphen).
 - **ML Kit char boxes vs. spaces** (`OcrGeometry.alignChars`, `MlKitOcr.alignedChars`): ML Kit
   reports symbols only for word characters, so flattening them gives fewer boxes than a spaced
   line's text and `PageLayout.glyphsOf` fell back to an even split — taps on proportional Latin

@@ -22,6 +22,7 @@ internal data class Form(
     val reason: String? = null,
     val asCandidate: Boolean = true,
     val deinflect: Boolean = true,
+    val normalizationOrder: Int = 0,
 )
 
 /**
@@ -68,7 +69,7 @@ internal class RuleBasedParser(
                 if (form.asCandidate) {
                     val reasons = listOfNotNull(form.reason)
                     val kind = if (reasons.isEmpty()) CandidateKind.NORMALIZED else CandidateKind.DEINFLECTION
-                    out.add(LookupCandidate(form.text, emptySet(), reasons, kind))
+                    out.add(LookupCandidate(form.text, emptySet(), reasons, kind, form.normalizationOrder))
                 }
             }
         }
@@ -85,6 +86,7 @@ internal class RuleBasedParser(
                             result.conditionsOut,
                             listOfNotNull(form.reason) + result.reasons,
                             if (irregular) CandidateKind.IRREGULAR else CandidateKind.DEINFLECTION,
+                            form.normalizationOrder,
                         ),
                     )
                 }
@@ -94,15 +96,18 @@ internal class RuleBasedParser(
         return out.toList().take(MAX_CANDIDATES)
     }
 
-    /** Insertion-ordered set keyed by (text, conditions, kind-is-exact): the same text via two POS stays twice. */
+    /** Keyed by (text, conditions), retaining the best kind/spelling; the same text via two POS stays twice. */
     private class CandidateList {
         private val map = LinkedHashMap<String, LookupCandidate>()
         fun add(candidate: LookupCandidate) {
             val key = candidate.text + "\u0000" + candidate.conditions.sorted().joinToString(",")
             val existing = map[key]
-            if (existing == null || candidate.kind.rank < existing.kind.rank) map[key] = candidate
+            if (existing == null || compareValuesBy(candidate, existing, { it.kind.rank }, { it.normalizationOrder }) < 0) {
+                map[key] = candidate
+            }
         }
-        fun toList(): List<LookupCandidate> = map.values.sortedBy { it.kind.rank }
+        fun toList(): List<LookupCandidate> =
+            map.values.sortedWith(compareBy<LookupCandidate> { it.kind.rank }.thenBy { it.normalizationOrder })
     }
 
     private companion object {
@@ -219,11 +224,35 @@ internal object Parsers {
 
     private fun englishParser(): LanguageParser = RuleBasedParser(
         "en", analyzerName("en"),
+        preprocess = ::englishHyphenVariants,
         deinflector = EnglishDeinflector,
         deinflectsExpressions = true,
         normalizeApostrophes = true,
         extra = ::irregularPhrasalHeads,
     )
+
+    /** Only internal hyphens join words; dashes, spaced hyphens and edge hyphens stay punctuation. */
+    private fun englishHyphenVariants(text: String): List<Form> {
+        val hyphens = text.indices.filter { i ->
+            WordSpans.isHyphen(text[i]) && i > 0 && i < text.lastIndex &&
+                WordSpans.isWordUnit(text, i - 1) && WordSpans.isWordUnit(text, i + 1)
+        }.toSet()
+        if (hyphens.isEmpty()) return emptyList()
+        val spaced = StringBuilder()
+        val joined = StringBuilder()
+        for ((i, c) in text.withIndex()) {
+            if (i in hyphens) {
+                spaced.append(' ')
+            } else {
+                spaced.append(c)
+                joined.append(c)
+            }
+        }
+        return listOf(
+            Form(spaced.toString(), normalizationOrder = 1),
+            Form(joined.toString(), normalizationOrder = 2),
+        )
+    }
 
     /**
      * Fushi's phrasal-verb head deinflection for irregular verbs (`deinflect_phrasal`): in a
@@ -246,6 +275,7 @@ internal object Parsers {
                     setOf("v_phr"),
                     candidate.reasons + Rule.IRREGULAR,
                     CandidateKind.IRREGULAR,
+                    candidate.normalizationOrder,
                 )
             }
         }

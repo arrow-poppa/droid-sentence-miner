@@ -111,11 +111,16 @@ internal class MultilingualEngine(
 
     private suspend fun spacedRange(text: String, index: Int, language: String, parser: LanguageParser): IntRange {
         val tokens = WordSpans.tokenize(text, joinsApostrophes(language))
-        val k = WordSpans.tokenIndexAt(tokens, index)
+        var k = WordSpans.tokenIndexAt(tokens, index)
+        // A tap on an internal English hyphen can validate the same compound as either half.
+        if (k < 0 && language == "en" && WordSpans.isHyphen(text[index]) && index > 0) {
+            val left = WordSpans.tokenIndexAt(tokens, index - 1)
+            if (left >= 0 && left + 1 < tokens.size && tokens[left + 1].start == index + 1) k = left
+        }
         if (k < 0) return graphemeRange(text, index)
         val token = tokens[k]
-        val word = token.start until token.end
-        val spans = WordSpans.spansContaining(text, tokens, k)
+        val word = if (index < token.end) token.start until token.end else graphemeRange(text, index)
+        val spans = WordSpans.spansContaining(text, tokens, k).filter { index >= it.start && index < it.end }
         if (spans.isEmpty()) return word
         val dicts = dictionaries()
         if (dicts.isEmpty()) return word
@@ -287,14 +292,16 @@ internal class MultilingualEngine(
 
     /**
      * One result per row (its best candidate), ranked: exact surface > safe normalization >
-     * deinflection > irregular form, then single-word before multi-word headwords, then dictionary
-     * priority and score. [bodies] null = scan hit (no glossary).
+     * deinflection > irregular form, then spelling order, single-word before multi-word headwords,
+     * then dictionary priority and score. [bodies] null = scan hit (no glossary).
      */
     private fun rank(hits: List<Hit>, bodies: Map<Long, TermBody>?): List<TermResult> {
         val best = LinkedHashMap<Long, Hit>()
         for (hit in hits) {
             val current = best[hit.head.id]
-            if (current == null || hit.candidate.kind.rank < current.candidate.kind.rank) best[hit.head.id] = hit
+            if (current == null || compareValuesBy(hit.candidate, current.candidate, { it.kind.rank }, { it.normalizationOrder }) < 0) {
+                best[hit.head.id] = hit
+            }
         }
         return best.values
             .map { hit ->
@@ -303,6 +310,7 @@ internal class MultilingualEngine(
             .distinctBy { (_, r) -> "${r.dictId}:${r.expression}:${r.reading}:${r.sequence}:${r.definitionTags}" }
             .sortedWith(
                 compareBy<Pair<Hit, TermResult>> { it.first.candidate.kind.rank }
+                    .thenBy { it.first.candidate.normalizationOrder }
                     .thenBy { if (it.second.expression.any { c -> c == ' ' || c == '-' }) 1 else 0 }
                     .thenBy { it.second.dictionaryPriority }
                     .thenByDescending { it.second.score },

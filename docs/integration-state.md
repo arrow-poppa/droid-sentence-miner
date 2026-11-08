@@ -53,6 +53,9 @@ subagents only when needed. PRs carry no personal name or email.
 
 ## Delivery and next verification
 
+- English compound follow-up (2026-11-08): hyphenated/spaced/joined spelling candidates and result
+  ranking, original Unicode hyphens/UTF-16 offsets, taps on either part or internal hyphens, and
+  scan/fallback/punctuation coverage added to JVM tests. Source review only; CI pending.
 - Bubble tap toggle follow-up (2026-11-08): Settings and the long-press menu share QUICK / REGION /
   AUTO_OCR; the new mode uses the existing consent/start/stop paths with state-change toasts.
   JVM preference compatibility tests added; source review only, CI and device validation pending.

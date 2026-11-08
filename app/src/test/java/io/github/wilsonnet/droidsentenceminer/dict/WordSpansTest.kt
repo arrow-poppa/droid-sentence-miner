@@ -48,12 +48,58 @@ class WordSpansTest {
     }
 
     @Test
-    fun `hyphens and spaces are normalized in the probe`() {
+    fun `probes collapse spaces but preserve the original hyphens`() {
         val text = "a  state‐of-the art"
         val tokens = WordSpans.tokenize(text, false)
         val spans = WordSpans.spansContaining(text, tokens, 2)
-        assertTrue(spans.any { it.probe == "state-of-the art" })
-        assertTrue(spans.any { it.probe == "a state-of-the art" })
+        assertTrue(spans.any { it.probe == "state‐of-the art" })
+        assertTrue(spans.any { it.probe == "a state‐of-the art" })
+    }
+
+    @Test
+    fun `compound spans cover either half and retain source offsets`() {
+        for (compound in listOf("open-source", "open‐source", "open‑source", "state-of-the-art")) {
+            val text = "🙂 $compound!"
+            val start = text.indexOf(compound)
+            val end = start + compound.length
+            val tokens = WordSpans.tokenize(text, true)
+            for (tap in listOf(start, end - 1)) {
+                val k = WordSpans.tokenIndexAt(tokens, tap)
+                val span = WordSpans.spansContaining(text, tokens, k).first { it.probe == compound }
+                assertEquals(start, span.start)
+                assertEquals(end, span.end)
+                assertEquals(compound, text.substring(span.start, span.end))
+            }
+            assertTrue(WordSpans.spansStartingAt(text, tokens, 0).any { it.probe == compound })
+        }
+    }
+
+    @Test
+    fun `spaced hyphens and punctuation dashes never join spans`() {
+        for (text in listOf("word — word", "word – word", "word - word", "word--word", "-word-")) {
+            val tokens = WordSpans.tokenize(text, false)
+            assertTrue(text, WordSpans.spansStartingAt(text, tokens, 0).isEmpty())
+            assertTrue(text, WordSpans.spansContaining(text, tokens, tokens.lastIndex).isEmpty())
+        }
+    }
+
+    @Test
+    fun `English compound candidates prefer hyphens then spaces then joined spelling`() {
+        val parser = LanguageParsers.forLanguage("en")
+        for (surface in listOf("open-source", "state-of-the-art")) {
+            val expected = listOf(surface, surface.replace('-', ' '), surface.replace("-", ""))
+            assertEquals(expected, parser.candidates(surface).filter { it.reasons.isEmpty() }.map { it.text })
+            assertEquals(expected, parser.expressionCandidates(surface).filter { it.reasons.isEmpty() }.map { it.text })
+        }
+        val variants = parser.candidates("Open‑Source").filter { it.reasons.isEmpty() }.map { it.text }
+        assertEquals("Open‑Source", variants.first())
+        assertTrue(variants.indexOf("open-source") < variants.indexOf("open source"))
+        assertTrue(variants.indexOf("open source") < variants.indexOf("opensource"))
+        for (surface in listOf("-word", "word-", "word — word", "word – word", "word - word", "word--word")) {
+            assertEquals(listOf(surface), parser.candidates(surface).filter { it.reasons.isEmpty() }.map { it.text })
+        }
+        // Spelling fallbacks are English-specific.
+        assertFalse(LanguageParsers.forLanguage("pt").candidates("open-source").any { it.text == "open source" })
     }
 
     @Test

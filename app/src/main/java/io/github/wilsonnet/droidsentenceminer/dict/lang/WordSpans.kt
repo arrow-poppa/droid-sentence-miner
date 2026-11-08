@@ -116,7 +116,11 @@ internal object WordSpans {
     private fun probe(text: String, tokens: List<Token>, from: Int, to: Int): String {
         val sb = StringBuilder()
         for (t in from..to) {
-            if (t > from) sb.append(separator(text, tokens[t - 1], tokens[t]))
+            if (t > from) {
+                val sep = separator(text, tokens[t - 1], tokens[t])
+                // Keep the original hyphen for exact lookup; the parser supplies spelling variants.
+                sb.append(if (sep == '-') text[tokens[t - 1].end] else sep)
+            }
             sb.append(text, tokens[t].start, tokens[t].end)
         }
         return sb.toString()

@@ -66,6 +66,12 @@ size, and removes low-confidence engine lines when a stronger line exists.
 using Yomitan/Jiten rules. Batched SQL queries resolve them, and longest-match-wins builds
 the clickable word list. Grammar-only single-kana matches are filtered as noise.
 
+On the multilingual development branch, English compounds such as **open-source** also try
+**open source**, then **opensource**. Taps on either part or the internal hyphen and line scans
+keep the original compound text and offsets when a dictionary matches. Without a compound match,
+selection falls back to the part under the finger. Hyphens U+2010/U+2011 are supported; punctuation
+dashes and hyphens separated by spaces never join words.
+
 The scan behind each tap reads only the light columns of each row (headword, reading, tags,
 rules). Glossaries are fetched only for the word you tapped, and recent lines stay cached, so
 many large dictionaries stay fast. On a Xiaomi Pad 7 with eight dictionaries (about 2.1 million

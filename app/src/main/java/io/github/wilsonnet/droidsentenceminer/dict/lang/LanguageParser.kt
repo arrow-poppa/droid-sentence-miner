@@ -21,13 +21,15 @@ enum class CandidateKind(val rank: Int) {
 /**
  * A form to look up for a selected surface. [conditions] are the part-of-speech conditions a
  * dictionary entry must satisfy (Yomitan `rules`; empty = any), [reasons] the deinflection chain
- * (empty for the surface and its normalizations).
+ * (empty for the surface and its normalizations). [normalizationOrder] breaks ties within a
+ * kind: English hyphen spellings precede space-separated (1), then joined (2) variants.
  */
 data class LookupCandidate(
     val text: String,
     val conditions: Set<String>,
     val reasons: List<String>,
     val kind: CandidateKind = if (reasons.isEmpty()) CandidateKind.EXACT else CandidateKind.DEINFLECTION,
+    val normalizationOrder: Int = 0,
 )
 
 /**
