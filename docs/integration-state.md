@@ -33,21 +33,29 @@ The prior Claude session reached its usage limit; do not assume an active review
 
 ## Status
 
-- `e97ef54`, CI run [42419879098](https://github.com/arrow-poppa/droid-sentence-miner/actions/runs/42419879098):
-  **389 tests, 0 skipped, 0 failures/errors**, including 107 AI tests across 47 total suites.
+- `e720d86`, CI run [42420278351](https://github.com/arrow-poppa/droid-sentence-miner/actions/runs/42420278351):
+  **391 tests, 0 skipped, 0 failures/errors**, including 107 AI tests across 47 total suites.
   Unit-test and debug-APK compilation steps succeeded. All compilation ran on GitHub Actions.
 - M1–M3: five ML Kit scripts, language catalog/profiles and pinned PaddleOCR ONNX manager/inference
   are implemented. Physical Android recognition, delivery and geometry remain unverified.
 - M4: recovered parser and behavioral tests integrated; app scan/tap/lookup/mining paths pass
-  study language. Follow-up preserves spaces between wrapped non-Japanese rows in the tracker.
+  study language. Wrapped non-Japanese rows retain word boundaries in the tracker/shared-text mining.
 - M5: recovered BYOK core/UI/tests integrated, native popup/settings and secure secrets storage.
   Mock HTTP tests pass; live APIs, Android Keystore and popup/device behavior are not verified.
 - M6: NCNN FP16 and secondary OCR engines are not implemented; assessment and limits are in
   [multilingual.md](multilingual.md). No placeholder backends are exposed as functional.
-- Draft PR: https://github.com/arrow-poppa/droid-sentence-miner/pull/1 (fork `main`, no upstream merge).
+- Draft PR: https://github.com/arrow-poppa/droid-sentence-miner/pull/1 (fork `main`; **no PR was opened against WilsonNet/the official repository**).
 
-## Next verification
+## Delivery and next verification
 
-Validate the final wrapped-text follow-up in CI and record its exact results.
-Device-only OCR/overlay/Anki checks must use a connected physical device and a CI-built APK.
-No local builds, no release tag, no upstream merge.
+- Code commits in this continuation: `9eafb28`, `259b1d5`, `7e115e3`, `e97ef54`, `e720d86`.
+- Both the branch-push CI and fork-PR CI passed for `e720d86`. Debug APK: 155,340,251 bytes;
+  ABIs arm64-v8a, armeabi-v7a, x86_64; SHA-256
+  `611789507dd9e18b5315c947bf761b506bc2f90856c5ef6ab866e40210156a79`.
+- The user chose **CI-only validation for now**. Physical-device checks remain deferred; do not
+  start an emulator or run local compilation. No live paid AI calls or device benchmarks were run.
+- The user explicitly prohibits an official/upstream PR at this stage. Keep work in the fork;
+  no upstream PR, merge, release tag or site publication without explicit authorization.
+- Future work: CI-built APK on a physical device for module downloads, Paddle OCR/geometry,
+  rotation/RTL, actual popup interactions, Keystore and Anki/audio regression measurements.
+  See [multilingual.md](multilingual.md) for the remaining optional backends and morphology gaps.

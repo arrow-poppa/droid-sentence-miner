@@ -38,12 +38,15 @@ and wait/retry rather than falling back to an emulator.
 
 ## Git
 
-Commit as Wilson Neto <wilsonpsn@hotmail.com>. The SSH key needs a passphrase, so push over HTTPS
-with the GitHub CLI token:
+Commit as Wilson Neto <wilsonpsn@hotmail.com>. This implementation is on the user's fork
+`https://github.com/arrow-poppa/droid-sentence-miner`, branch
+`feature/multilingual-ocr-parser-byok`. Do not push to the official `WilsonNet` repository or
+open a PR there unless the user explicitly requests it. A draft PR within the fork is not an
+upstream submission. Push the implementation branch over HTTPS with the GitHub CLI token:
 
 ```bash
 git -c credential.helper= -c credential.helper='!gh auth git-credential' \
-  push https://github.com/WilsonNet/droid-sentence-miner.git main
+  push origin HEAD:feature/multilingual-ocr-parser-byok
 ```
 
 ## Resource policy for this workspace

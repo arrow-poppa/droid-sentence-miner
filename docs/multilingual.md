@@ -102,3 +102,24 @@ These are absent from the functional picker, not claimed integrations:
 
 No secondary weights were downloaded or bundled during this continuation. This assessment does
 not claim benchmark results or a legal determination about using any particular artifact.
+
+## Important implementation files
+
+| Files | Responsibility |
+|---|---|
+| `ocr/OcrEngineRegistry.kt`, `MlKitOcr.kt`, `MlKitLanguageCatalog.kt`, `core/Prefs.kt` | Independent language/engine/model settings and five ML Kit recognizers |
+| `ocr/OcrGeometry.kt`, `PaddleOcr.kt`, `PaddleDecoder.kt`, `PaddleModels.kt` | Coordinate remapping, ONNX inference/CTC, pinned model integrity and lifecycle |
+| `capture/AutoOcrController.kt`, `ScreenText.kt`, `textlog/TextLineTracker.kt` | Live reconfiguration, tappable multilingual lines and wrapped-sentence boundaries |
+| `dict/lang/**`, `dict/TermLookup.kt`, `dict/DictDatabase.kt` | Language selection/candidates over the existing Room database; added DAO query, no schema change |
+| `ai/**`, `ui/screens/AiSettingsScreen.kt`, `ui/components/LookupAiExplanation.kt` | Provider requests, secure keys, streaming/cache and native popup integration |
+| `anki/CardMiner.kt`, `anki/WordAudio.kt` | Original-surface sentence highlighting and language-appropriate pronunciation sources |
+| `app/src/test/**/ai/**`, `dict/MultilingualLookupTest.kt`, OCR/textlog tests | Mock provider, selection/morphology, geometry and sentence-joining regressions |
+
+The paths above are relative to `app/src/main/java/io/github/wilsonnet/droidsentenceminer/`
+unless an explicit `app/src/test/` prefix is shown. Build/test commands and CI APK retrieval are
+in [building.md](building.md); exact test results and artifact hash are in [validation.md](validation.md).
+
+Paddle model-family metadata labels the ONNX weights Apache-2.0; see the publisher's
+[v6 detector](https://huggingface.co/PaddlePaddle/PP-OCRv6_tiny_det_onnx) and
+[v5 Arabic recognizer](https://huggingface.co/PaddlePaddle/arabic_PP-OCRv5_mobile_rec_onnx).
+The immutable revisions and hashes actually downloaded are recorded in `PaddleModels.kt`.
