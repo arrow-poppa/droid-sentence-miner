@@ -78,6 +78,28 @@ enum class PaddleRecognizer(val component: PaddleComponent, val profile: TextPro
 
     val id: String get() = component.id
 
+    /** Chimahon's engine-list names (`chimahon.ocr.PaddleRecognizer.label`). */
+    val label: String
+        get() = when (this) {
+            LATIN -> "PaddleOCR v6 — Latin (Tiny)"
+            MULTILINGUAL -> "PaddleOCR v6 — Multilingual (Chinese / Japanese / Latin)"
+            CYRILLIC -> "PaddleOCR v5 — Cyrillic"
+            ARABIC -> "PaddleOCR v5 — Arabic"
+            GREEK -> "PaddleOCR v5 — Greek"
+            KOREAN -> "PaddleOCR v5 — Korean"
+        }
+
+    /** What the recognizer reads, for the engine list. */
+    val note: String
+        get() = when (this) {
+            LATIN -> "Lightweight, Latin script only (English, Spanish, German…). For Romanian or mixed text pick Multilingual."
+            MULTILINGUAL -> "Chinese, Japanese and Latin text; the largest recognizer."
+            CYRILLIC -> "Russian, Ukrainian, Bulgarian, Belarusian, Serbian…"
+            ARABIC -> "Arabic, Persian, Urdu (right to left)."
+            GREEK -> "Greek."
+            KOREAN -> "Hangul (and Latin)."
+        }
+
     companion object {
         fun fromId(id: String?): PaddleRecognizer? = entries.firstOrNull { it.id == id }
 

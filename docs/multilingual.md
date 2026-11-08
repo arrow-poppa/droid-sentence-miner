@@ -19,6 +19,10 @@ The ML Kit catalog represents 37 supported, 16 experimental and 122 mapped rows 
 Language rows share script recognizers. Mappings to a Cyrillic recognizer in that page do not
 create a sixth Android ML Kit engine. OCR model and study-language parser are independent.
 Auto selects one configured engine from the language profile; it does not run all models.
+Settings → OCR lists PaddleOCR like Chimahon's engine list: one option per recognizer (plus "the
+study language's"), a detector choice (Tiny/Small) that is always visible and applies whenever
+PaddleOCR runs (also via Auto), and a *PaddleOCR models* list with Download/Delete for every
+component. Picking a recognizer or detector downloads what the resulting choice needs.
 Changing study language, engine, script/model or noise filtering resets the active auto-OCR
 engine/tracker on its next poll. Initialization and recognition failures remain visible in status.
 

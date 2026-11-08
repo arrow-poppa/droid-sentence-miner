@@ -22,8 +22,11 @@ button or gesture returns to the list.
 - **ML Kit script** — Latin, Chinese, Japanese, Korean or Devanagari. Latin/Japanese are bundled;
   the other three require Google Play services and an initial model download. Catalog entries
   share script models and keep Google's supported/experimental/mapped categories.
-- **PaddleOCR detector and recognizer** — download only the selected pinned models, inspect their
-  status and delete them in Settings. Models are checked with SHA-256 and run locally after installation.
+- **PaddleOCR** — as in Chimahon, every recognizer is its own engine option (Latin Tiny,
+  Multilingual, Cyrillic, Arabic, Greek, Korean, or the study language's), and **PaddleOCR
+  detector** (Tiny or Small) is always shown and shared by all of them. Picking one downloads the
+  detector and recognizer it needs. **PaddleOCR models** lists every model with its status, size
+  and Download/Delete. Models are checked with SHA-256 and run locally after installation.
 - **Download meikiocr models (31 MB)** — until installed, the Japanese path uses ML Kit.
 - **Two-pass OCR (ML Kit)** — optionally re-read detected lines at higher resolution.
 - **Filter non-study-language lines** — remove background UI noise using the chosen text profile.

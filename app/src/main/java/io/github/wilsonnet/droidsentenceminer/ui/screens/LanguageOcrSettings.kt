@@ -164,8 +164,40 @@ fun OcrModelOptions(container: AppContainer, engine: String) {
         "meikiocr or ML Kit for Japanese, ML Kit for Latin/Chinese/Korean/Devanagari, PaddleOCR for Cyrillic/Arabic/Greek.") {
         scope.launch { container.prefs.setOcrEngine(DsmPrefs.ENGINE_AUTO) }
     }
-    EngineRadio(engine == DsmPrefs.ENGINE_PADDLE, "PaddleOCR", "PP-OCRv6/v5 on ONNX Runtime, on device. Models download on demand (2–21 MB each).") {
-        scope.launch { container.prefs.setOcrEngine(DsmPrefs.ENGINE_PADDLE) }
+    // PaddleOCR as in Chimahon's engine list: one entry per recognizer, the detector shared below.
+    // Picking one also downloads what it needs (detector + recognizer) in the background.
+    fun usePaddle(recognizer: String) {
+        container.appScope.launch {
+            container.prefs.setOcrEngine(DsmPrefs.ENGINE_PADDLE)
+            container.prefs.setOcrPaddleRecognizer(recognizer)
+            downloadPaddleChoice(container, context)
+        }
+    }
+    Text("PaddleOCR", style = MaterialTheme.typography.bodyLarge)
+    Note("On device (ONNX Runtime, CPU). Pick the recognizer for your script; its model downloads when picked.")
+    EngineRadio(
+        engine == DsmPrefs.ENGINE_PADDLE && PaddleRecognizer.fromId(paddleRecPref) == null,
+        "PaddleOCR — recognizer of the study language",
+        "Now: ${PaddleRecognizer.forLanguage(language).label}",
+    ) { usePaddle(DsmPrefs.AUTO) }
+    PaddleRecognizer.entries.forEach { rec ->
+        EngineRadio(
+            engine == DsmPrefs.ENGINE_PADDLE && paddleRecPref == rec.id,
+            rec.label,
+            "${rec.note} ${megabytes(rec.component)}.",
+        ) { usePaddle(rec.id) }
+    }
+    Text("PaddleOCR detector", style = MaterialTheme.typography.bodyLarge)
+    Note("Finds the text lines for every PaddleOCR recognizer (also when Automatic picks PaddleOCR).")
+    ChoiceRow(
+        paddleDetectors.map { it.id to "${it.label.removeSuffix(" detector")} (${megabytes(it)}${if (it == PaddleComponent.DET_TINY) ", default, faster" else ""})" },
+        paddleDetPref,
+    ) { id ->
+        container.appScope.launch {
+            container.prefs.setOcrPaddleDetector(id)
+            container.ocrEngines.releasePaddle()
+            if (container.ocrEngines.choice().engine == DsmPrefs.ENGINE_PADDLE) downloadPaddleChoice(container, context)
+        }
     }
     choice?.let { c ->
         val used = when (c.engine) {
@@ -201,33 +233,41 @@ fun OcrModelOptions(container: AppContainer, engine: String) {
         }
     }
 
-    if (engine == DsmPrefs.ENGINE_PADDLE || choice?.engine == DsmPrefs.ENGINE_PADDLE) {
-        Text("PaddleOCR recognizer", style = MaterialTheme.typography.bodyLarge)
-        ChoiceRow(listOf(DsmPrefs.AUTO to "Auto") + PaddleRecognizer.entries.map { it.id to it.component.label.removePrefix("PP-OCRv6 ").removePrefix("PP-OCRv5 ") }, paddleRecPref) {
-            scope.launch { container.prefs.setOcrPaddleRecognizer(it) }
-        }
-        Text("Detector", style = MaterialTheme.typography.bodyLarge)
-        ChoiceRow(listOf("det_tiny" to "Tiny (1.8 MB, faster)", "det_small" to "Small (9.9 MB)"), paddleDetPref) {
-            scope.launch {
-                container.prefs.setOcrPaddleDetector(it)
-                container.ocrEngines.releasePaddle()
-            }
-        }
-        val needed = listOfNotNull(choice?.paddleDetector, choice?.paddleRecognizer?.component)
-        needed.forEach { component -> PaddleComponentRow(container, component) }
+    // Every PaddleOCR model, like Chimahon's "Downloaded models": download or delete any of them.
+    Text("PaddleOCR models", style = MaterialTheme.typography.bodyLarge)
+    val inUse = if (choice?.engine == DsmPrefs.ENGINE_PADDLE) {
+        setOfNotNull(choice?.paddleDetector, choice?.paddleRecognizer?.component)
+    } else {
+        emptySet()
     }
+    PaddleComponent.entries.forEach { component -> PaddleComponentRow(container, component, component in inUse) }
+}
+
+private val paddleDetectors = PaddleComponent.entries.filter { it.isDetector }
+
+private fun megabytes(component: PaddleComponent) = "%.1f MB".format(component.onnxBytes / 1_000_000.0)
+
+/** Downloads the detector and recognizer the current settings resolve to (skips installed ones). */
+private suspend fun downloadPaddleChoice(container: AppContainer, context: android.content.Context) {
+    val c = container.ocrEngines.choice()
+    if (c.engine != DsmPrefs.ENGINE_PADDLE) return
+    PaddleModels.download(context.applicationContext, listOfNotNull(c.paddleDetector, c.paddleRecognizer?.component))
 }
 
 @Composable
-private fun PaddleComponentRow(container: AppContainer, component: PaddleComponent) {
+private fun PaddleComponentRow(container: AppContainer, component: PaddleComponent, inUse: Boolean) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val state by PaddleModels.stateFlow(component).collectAsState()
     LaunchedEffect(component) { PaddleModels.state(context, component) }
-    val mb = "%.1f MB".format(component.onnxBytes / 1_000_000.0)
+    val mb = megabytes(component)
     Row(verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text(component.label, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                component.label + if (inUse) " · in use" else "",
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (inUse) FontWeight.SemiBold else null,
+            )
             val status = when (val s = state) {
                 PaddleModels.State.Installed -> "Installed · $mb · revision ${component.revision.take(7)}"
                 is PaddleModels.State.Downloading -> "Downloading ${s.percent}%"
