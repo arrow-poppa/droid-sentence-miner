@@ -249,6 +249,8 @@ private const val AI_SCRIPT = """<style>
 #ai-explanation-top.dark .ai-error{color:#ef9a9a}
 #ai-explanation-top .ai-actions{display:flex;gap:6px;margin-top:6px;flex-wrap:wrap}
 #ai-explanation-top .ai-actions button{font:inherit;font-size:.85em;padding:3px 12px;border-radius:12px;border:1px solid currentColor;background:none;color:inherit;opacity:.85}
+#ai-explanation-top .ai-actions button:disabled{opacity:.45}
+#ai-explanation-top .ai-actions .ai-anki{font-weight:600}
 #ai-explanation-top .ai-regenerate-btn{position:absolute;top:5px;right:5px;background:none;border:none;color:inherit;opacity:.7;font-size:17px;font-weight:bold;min-width:30px;min-height:30px;padding:2px 6px;border-radius:4px}
 #ai-explanation-top .ai-regenerate-btn:disabled{opacity:.3}
 [hidden]{display:none!important}
@@ -290,12 +292,18 @@ function dsmSetAi(p, dark) {
   if (st === 'idle') actions.push(['generate', 'Generate explanation']);
   if (st === 'not-configured' || p.configurable) actions.push(['configure', 'Configure']);
   if (st === 'loading' || st === 'streaming') actions.push(['cancel', 'Cancel']);
-  if (st === 'done') actions.push(['copy', 'Copy']);
+  if (st === 'done') {
+    actions.push(['copy', 'Copy']);
+    // Sends the answer to the word's card as plain text: fills the existing note, or adds the card.
+    if (p.anki) actions.push(['anki', {'saving': 'Saving…', 'saved': '✓ Anki', 'failed': 'Anki (retry)'}[p.anki] || 'Anki', p.anki === 'saving']);
+  }
   if (st === 'error' && p.retryable) actions.unshift(['regenerate', 'Try again']);
   var bar = box.querySelector('.ai-actions');
   bar.innerHTML = '';
   actions.forEach(function (a) {
-    var b = document.createElement('button'); b.type = 'button'; b.dataset.ai = a[0]; b.textContent = a[1]; bar.appendChild(b);
+    var b = document.createElement('button'); b.type = 'button'; b.dataset.ai = a[0]; b.textContent = a[1]; b.disabled = !!a[2];
+    if (a[0] === 'anki') b.className = 'ai-anki';
+    bar.appendChild(b);
   });
   bar.hidden = actions.length === 0;
   box.querySelector('.ai-regenerate-btn').disabled = st === 'loading' || st === 'streaming' || st === 'not-configured';
@@ -426,6 +434,24 @@ private class WordLookupState {
      */
     var popupSelection: String? = null
 
+    /**
+     * The AI box's "Anki" button: the answer it sent and how that went (`saving`, `saved`,
+     * `failed`, or `mine` while it rides on a new card, whose progress is entry 0's state).
+     */
+    var aiAnki by mutableStateOf<Pair<String, String>?>(null)
+
+    /** The button's state for answer [text]; a regenerated answer starts over at `new`. */
+    fun aiAnkiStatus(text: String): String {
+        val (_, status) = aiAnki?.takeIf { it.first == text } ?: return "new"
+        if (status != "mine") return status
+        return when (entryStates[0]) {
+            EntryState.MINING -> "saving"
+            EntryState.ADDED -> "saved"
+            EntryState.FAILED -> "failed"
+            else -> "new"
+        }
+    }
+
     /** Per entry: the dictionary tapped in the popup to go on its card instead of the setting's choice. */
     val cardPicks = androidx.compose.runtime.mutableStateMapOf<Int, Long>()
 
@@ -525,6 +551,49 @@ private fun mineAction(
     }
 }
 
+/**
+ * The AI box's "Anki" button: the finished answer goes to the word's card as plain text. A word
+ * that already has a note gets that note's AI explanation field overwritten
+ * ([CardMiner.saveAiExplanation]); otherwise the card is added as "+ Anki" would (it carries the
+ * answer too). Null while there is no finished answer.
+ */
+@Composable
+private fun aiAnkiAction(
+    state: WordLookupState,
+    word: String,
+    ai: LookupAi?,
+    mine: (Int, CardEdits?) -> Unit,
+): (() -> Unit)? {
+    val context = LocalContext.current
+    val container = remember { AppContainer.from(context) }
+    val text = ai?.text ?: return null
+    return action@{
+        if (state.mining || state.aiAnkiStatus(text) == "saving") return@action
+        if (state.inAnki != true) {
+            state.aiAnki = text to "mine"
+            mine(0, null)
+            return@action
+        }
+        val details = state.cardDetails(0)
+        val headword = details?.baseForm ?: word
+        state.aiAnki = text to "saving"
+        state.status = null
+        container.appScope.launch {
+            val result = container.miner.saveAiExplanation(word, details, text)
+            withContext(Dispatchers.Main) {
+                if (state.aiAnki?.first == text) state.aiAnki = text to if (result is AnkiResult.Success) "saved" else "failed"
+                val message = when (result) {
+                    is AnkiResult.Success -> "✓ AI explanation saved to 「$headword」 (${result.value})"
+                    is AnkiResult.Error -> "AI explanation not saved: ${result.message}"
+                    AnkiResult.NotAvailable -> "AI explanation not saved: Anki backend not available"
+                }
+                if (result !is AnkiResult.Success) state.status = message
+                Toast.makeText(context.applicationContext, message, Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+}
+
 @Composable
 private fun LookupHeader(
     state: WordLookupState,
@@ -558,6 +627,8 @@ private fun LookupBody(
     onEntryEdit: ((Int) -> Unit)? = null,
     /** The AI explanation, drawn at the top of the definition page; null: none. */
     ai: LookupAi? = null,
+    /** The AI box's "Anki" button ([aiAnkiAction]); null: no button. */
+    onAiAnki: (() -> Unit)? = null,
 ) {
     if (state.loading) {
         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -599,8 +670,13 @@ private fun LookupBody(
             cardPicks = state.cardPicks.toMap(),
             aiBox = true,
             onSelectionChange = { state.popupSelection = it },
-            aiPayload = ai?.payload(),
-            onAiAction = ai?.let { a -> { action: String -> a.act(action) } },
+            aiPayload = ai?.let { a -> a.payload(anki = a.text?.takeIf { onAiAnki != null }?.let(state::aiAnkiStatus)) },
+            onAiAction = ai?.let { a ->
+                { action: String ->
+                    if (action == "anki") onAiAnki?.invoke() else a.act(action)
+                    Unit
+                }
+            },
         )
     }
 }
@@ -719,6 +795,7 @@ fun WordLookupDialog(
         CardExtras(aiExplanation = ai?.text, popupSelection = state.popupSelection)
     }
     val edit = editorAction(state, entry.word, entry.sentence, loadAudio.takeIf { stack.size == 1 }, mine, openEditor = null)
+    val aiAnki = aiAnkiAction(state, entry.word, ai, mine)
     val onTap = recursiveTap(stack)
     if (stack.size > 1) androidx.activity.compose.BackHandler { stack.removeAt(stack.lastIndex) }
 
@@ -728,7 +805,7 @@ fun WordLookupDialog(
         text = {
             // No verticalScroll here: the WebView scrolls itself, and an outer scroll fought it for drags.
             Column(Modifier.heightIn(max = 420.dp)) {
-                LookupBody(state, dark, maxHeight = 360.dp, onTextTap = onTap, onEntryMine = { mine(it, null) }, onEntryEdit = edit, ai = ai)
+                LookupBody(state, dark, maxHeight = 360.dp, onTextTap = onTap, onEntryMine = { mine(it, null) }, onEntryEdit = edit, ai = ai, onAiAnki = aiAnki)
                 state.status?.let {
                     Spacer(Modifier.size(8.dp))
                     Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
@@ -846,6 +923,7 @@ fun WordLookupCard(
         CardExtras(aiExplanation = ai?.text, popupSelection = state.popupSelection)
     }
     val edit = editorAction(state, entry.word, entry.sentence, loadAudio.takeIf { stack.size == 1 }, mine, openEditor)
+    val aiAnki = aiAnkiAction(state, entry.word, ai, mine)
     val onTap = recursiveTap(stack)
 
     if (handleBack) {
@@ -883,7 +961,7 @@ fun WordLookupCard(
             // bottom of the definition when the header was taller (deinflection line, error, back).
             Column(Modifier.weight(1f, fill = false).padding(end = 8.dp)) {
                 Box(Modifier.weight(1f, fill = false)) {
-                    LookupBody(state, dark, maxHeight = maxHeight, onTextTap = onTap, onEntryMine = { mine(it, null) }, onEntryEdit = edit, ai = ai)
+                    LookupBody(state, dark, maxHeight = maxHeight, onTextTap = onTap, onEntryMine = { mine(it, null) }, onEntryEdit = edit, ai = ai, onAiAnki = aiAnki)
                 }
             }
         }

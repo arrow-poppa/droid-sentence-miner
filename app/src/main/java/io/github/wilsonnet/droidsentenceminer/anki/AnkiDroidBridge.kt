@@ -197,6 +197,37 @@ class AnkiDroidBridge(private val context: Context) : AnkiBridge {
         }.getOrElse { AnkiResult.Error(it.message ?: "AnkiDroid error") }
     }
 
+    override suspend fun updateField(
+        word: String,
+        deck: String,
+        model: String,
+        canonical: String,
+        value: String,
+        fieldMap: Map<String, String>?,
+    ): AnkiResult<String> = withContext(Dispatchers.IO) {
+        if (!isAvailable()) return@withContext AnkiResult.NotAvailable
+        try {
+            val modelId = api.modelList.orEmpty().entries.firstOrNull { it.value == model }?.key
+                ?: return@withContext AnkiResult.Error("Note type '$model' not found")
+            val names = api.getFieldList(modelId)?.toList()
+                ?: return@withContext AnkiResult.Error("Note type '$model' has no fields")
+            val field = AnkiFieldMapper.modelFieldFor(canonical, names, fieldMap)
+                ?: return@withContext AnkiResult.Error("'$model' has no ${CardFields.label(canonical)} field (Settings → Anki → Fields)")
+            // Same lookup as the duplicate check: the note type's first field, collection-wide.
+            val note = api.findDuplicateNotes(modelId, word).filterNotNull().maxByOrNull { it.getId() }
+                ?: return@withContext AnkiResult.Error("No note for 「$word」 yet")
+            val fields = note.getFields().copyOf(names.size).map { it.orEmpty() }.toTypedArray()
+            fields[names.indexOf(field)] = value
+            if (api.updateNoteFields(note.getId(), fields)) {
+                AnkiResult.Success(field)
+            } else {
+                AnkiResult.Error("AnkiDroid did not update the note")
+            }
+        } catch (e: Exception) {
+            AnkiResult.Error(e.message ?: "AnkiDroid error")
+        }
+    }
+
     private fun addMedia(bytes: ByteArray, filename: String, mimeType: String): String? {
         val dir = File(context.cacheDir, "anki-media").apply { mkdirs() }
         val file = File(dir, filename.replace(Regex("[^A-Za-z0-9._-]"), "_"))

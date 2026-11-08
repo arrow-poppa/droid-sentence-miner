@@ -123,6 +123,10 @@ Everything the app does, in detail. The short version is in the [README](../READ
   the popup when you add the card (Chimahon's `{ai-explanation}`); *Popup selection* is the text you
   last selected in the popup (Yomitan's `{popup-selection-text}`). Fields named like *AI Explanation*
   or *SelectionText* (Lapis) are matched automatically; new DSM note types get both fields.
+  The AI box's **Anki** button sends the finished explanation as plain text (escaped, line breaks
+  kept): a word already in Anki gets the AI explanation field of its newest note overwritten (the
+  note the duplicate check finds: first field, configured note type); otherwise the card is added
+  as *+ Anki* would, with the explanation on it. A note type with no AI explanation field says so.
 - **Word audio like Yomitan** — the word's pronunciation is fetched from the same sources Yomitan
   uses for Japanese, in the same order: JapanesePod101 (placeholder clip rejected by hash),
   JapanesePod101 dictionary search, Jisho; plus an optional custom URL (`{term}`/`{reading}`,

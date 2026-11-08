@@ -74,6 +74,18 @@ interface AnkiBridge {
     suspend fun addNote(card: AnkiCard, deck: String, model: String, fieldMap: Map<String, String>? = null): AnkiResult<String>
     /** Whether [model] already has a note for [word] (its first field), like Yomitan's duplicate check. */
     suspend fun isDuplicate(word: String, deck: String, model: String): AnkiResult<Boolean>
+    /**
+     * Overwrites one field ([canonical], a [CardFields] name, placed by [fieldMap] or by name like
+     * [addNote]) on the newest note of [model] whose first field is [word]. Success = the field name.
+     */
+    suspend fun updateField(
+        word: String,
+        deck: String,
+        model: String,
+        canonical: String,
+        value: String,
+        fieldMap: Map<String, String>? = null,
+    ): AnkiResult<String>
 }
 
 object CardFields {

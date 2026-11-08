@@ -152,4 +152,14 @@ class AnkiFieldMapperTest {
         assertEquals("", CardHtml.plainText(null))
         assertEquals("", CardHtml.plainText("   "))
     }
+
+    @Test
+    fun `the AI box's Anki button writes to the field adding a card would fill`() {
+        val model = listOf("Word", "Glossary", "AI Explanation", "Sentence")
+        assertEquals("AI Explanation", AnkiFieldMapper.modelFieldFor(CardFields.AI_EXPLANATION, model))
+        // A pick in Settings → Anki → Fields wins over the name match, and "" leaves it out.
+        val custom = mapOf("Word" to CardFields.EXPRESSION, "Sentence" to CardFields.AI_EXPLANATION, "AI Explanation" to "")
+        assertEquals("Sentence", AnkiFieldMapper.modelFieldFor(CardFields.AI_EXPLANATION, model, custom))
+        assertEquals(null, AnkiFieldMapper.modelFieldFor(CardFields.AI_EXPLANATION, listOf("Front", "Back")))
+    }
 }

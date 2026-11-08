@@ -175,7 +175,10 @@ See `.opencode/skills/dsm-debug-api/SKILL.md` for the full reference and recipes
   with the entries — a separate height-capped Compose box above the WebView cut long answers in
   half. The script is always on popup pages (`aiBox = true`): AI settings load after the first
   frame. `AiExplanationSection` draws it natively only for the no-entry fallback. Cards: fields
-  `AiExplanation` / `PopupSelection` (`CardExtras` through `MineCallback` → `CardMiner`). Settings expose
+  `AiExplanation` / `PopupSelection` (`CardExtras` through `MineCallback` → `CardMiner`); the
+  box's **Anki** button (`aiAnkiAction`) overwrites that field on the existing note via
+  `AnkiBridge.updateField` (field from `AnkiFieldMapper.modelFieldFor`, same as adding) or mines
+  the card when the word has no note. Settings expose
   only `AiProviderType.CUSTOM`; `AiSettingsStore.migrateToCustom` moves older provider settings.
   `cancelPendingRequests` off keeps abandoned calls running into the cache (`Inflight.keepAlive`);
   the popup's Cancel always cancels (`AiExplanationService.cancel`).

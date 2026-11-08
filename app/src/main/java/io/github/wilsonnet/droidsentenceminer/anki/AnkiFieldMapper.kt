@@ -57,6 +57,17 @@ object AnkiFieldMapper {
         return result
     }
 
+    /**
+     * The note type field that receives [canonical] when a card is added: the Fields editor's pick
+     * ([custom]) or the name match. Null when nothing receives it (also the Front/Back layout).
+     */
+    fun modelFieldFor(canonical: String, fieldNames: List<String>, custom: Map<String, String>? = null): String? =
+        if (custom != null) {
+            fieldNames.firstOrNull { custom[it] == canonical }
+        } else {
+            canonicalToModelField(fieldNames)[canonical]
+        }
+
     /** The automatic choice as model field -> canonical field ("" = left empty), for the Fields editor. */
     fun automaticAssignment(fieldNames: List<String>): Map<String, String> {
         val mapping = canonicalToModelField(fieldNames)

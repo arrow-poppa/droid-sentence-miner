@@ -165,6 +165,18 @@ class CardMiner(
         (ankiClient.isDuplicate(expression) as? AnkiResult.Success)?.value
     }
 
+    /**
+     * The AI box's "Anki" button on a word that already has a note: writes [text] as plain text
+     * (escaped, line breaks kept) into that note's AI explanation field. Success = the field name.
+     */
+    suspend fun saveAiExplanation(word: String, details: TermLookup.LookupDetails?, text: String): AnkiResult<String> =
+        withContext(Dispatchers.IO) {
+            val expression = details?.baseForm?.ifBlank { word } ?: word
+            ankiClient.updateField(expression, CardFields.AI_EXPLANATION, CardHtml.plainText(text)).also {
+                android.util.Log.i(TAG, "「$expression」: AI explanation → Anki: $it")
+            }
+        }
+
     suspend fun mine(
         word: String,
         sentence: String,

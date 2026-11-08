@@ -206,6 +206,42 @@ class AnkiConnectBridge(
         }
     }
 
+    override suspend fun updateField(
+        word: String,
+        deck: String,
+        model: String,
+        canonical: String,
+        value: String,
+        fieldMap: Map<String, String>?,
+    ): AnkiResult<String> = withContext(Dispatchers.IO) {
+        val names = modelFieldNames(model) ?: return@withContext AnkiResult.Error("Note type '$model' not found")
+        val field = AnkiFieldMapper.modelFieldFor(canonical, names, fieldMap)
+            ?: return@withContext AnkiResult.Error("'$model' has no ${CardFields.label(canonical)} field (Settings → Anki → Fields)")
+        // The note isDuplicate finds: first field, this deck and note type; the newest if several.
+        val sanitized = word.replace("\"", "")
+        val query = "deck:\"$deck\" note:\"$model\" \"${names.first()}:$sanitized\""
+        val noteId = when (val found = invoke("findNotes", buildJsonObject { put("query", query) })) {
+            is AnkiResult.Success -> found.value.jsonArray.mapNotNull { it.jsonPrimitive.longOrNull }.maxOrNull()
+                ?: return@withContext AnkiResult.Error("No note for 「$word」 yet")
+            is AnkiResult.Error -> return@withContext found
+            AnkiResult.NotAvailable -> return@withContext AnkiResult.NotAvailable
+        }
+        val params = buildJsonObject {
+            put(
+                "note",
+                buildJsonObject {
+                    put("id", noteId)
+                    put("fields", buildJsonObject { put(field, value) })
+                },
+            )
+        }
+        when (val response = invoke("updateNoteFields", params)) {
+            is AnkiResult.Success -> AnkiResult.Success(field)
+            is AnkiResult.Error -> response
+            AnkiResult.NotAvailable -> AnkiResult.NotAvailable
+        }
+    }
+
     private suspend fun modelFieldNames(model: String): List<String>? {
         val params = buildJsonObject { put("modelName", model) }
         return when (val response = invoke("modelFieldNames", params)) {
@@ -286,6 +322,12 @@ class AnkiClient(
     suspend fun isDuplicate(word: String): AnkiResult<Boolean> {
         val snapshot = prefs.snapshot()
         return bridge().isDuplicate(word, snapshot.ankiDeck, snapshot.ankiModel)
+    }
+
+    /** [AnkiBridge.updateField] on the configured deck and note type, with its field mapping. */
+    suspend fun updateField(word: String, canonical: String, value: String): AnkiResult<String> {
+        val snapshot = prefs.snapshot()
+        return bridge().updateField(word, snapshot.ankiDeck, snapshot.ankiModel, canonical, value, prefs.ankiFieldMap(snapshot.ankiModel))
     }
 
     suspend fun fallback(): AnkiBridge = if (prefs.ankiProvider.first() == DsmPrefs.PROVIDER_ANKICONNECT) ankiDroid else ankiConnect

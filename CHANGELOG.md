@@ -15,6 +15,7 @@ versions are the `v*` tags that publish a signed APK on
 ### Changed
 - The AI explanation sits at the top of the lookup popup, above the dictionary entries, in Yomitan's style (accent bar, ↻ regenerate, streaming caret, Copy); generates on lookup by default once AI is enabled.
 - Anki fields *AI explanation* (`{ai-explanation}`) and *Popup selection* (`{popup-selection-text}`): the popup's finished explanation and the text last selected in it, auto-matched to fields such as *AI Explanation* and *SelectionText*.
+- An **Anki** button in the AI box sends the finished explanation to the word's card as plain text: it fills the AI explanation field of the existing note (AnkiDroid `updateNoteFields` / AnkiConnect `updateNoteFields`), or adds the card with it when the word has none yet.
 - AI settings offer only the Custom provider, with all of its options; settings saved for OpenAI/Gemini/DeepSeek/OpenRouter move to it. New *Cancel unfinished requests* option.
 
 ### Fixed

@@ -48,7 +48,9 @@ entries**, as in Yomitan: the selected original word and its sentence go to your
 regenerates, **Cancel** stops the request, and closing/changing the lookup cancels it (unless
 *Cancel unfinished requests* is off). Dictionary results remain available without AI. Map a
 note-type field to **AI explanation** in Cards → Fields to put the explanation on the card;
-**Popup selection** adds the text you selected in the popup.
+**Popup selection** adds the text you selected in the popup. The **Anki** button in the AI box
+sends the explanation as plain text to the word's card: it fills that field on the existing note,
+or adds the card if the word isn't in Anki yet.
 
 These additions still need physical-device validation; build/test evidence is recorded in the
 repository's `docs/integration-state.md` and `docs/multilingual.md`.

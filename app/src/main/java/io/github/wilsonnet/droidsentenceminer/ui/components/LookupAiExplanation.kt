@@ -35,14 +35,17 @@ class LookupAi internal constructor(
     val state: AiExplanationState,
     private val onAction: (String) -> Unit,
 ) {
-    /** `generate`, `regenerate`, `cancel`, `copy`, `configure`. */
+    /** `generate`, `regenerate`, `cancel`, `copy`, `configure` (`anki` is the host's: it owns the card). */
     fun act(action: String) = onAction(action)
 
     /** The finished answer, for the card (`{ai-explanation}`); null while none is shown. */
     val text: String? get() = (state as? AiExplanationState.Done)?.text
 
-    /** What `dsmSetAi` in the page renders. */
-    fun payload(): String = buildJsonObject {
+    /**
+     * What `dsmSetAi` in the page renders. [anki]: the "Anki" button's state for the finished
+     * answer (`new`, `saving`, `saved`, `failed`); null hides the button.
+     */
+    fun payload(anki: String? = null): String = buildJsonObject {
         when (val s = state) {
             AiExplanationState.Idle -> put("status", "idle")
             AiExplanationState.NotConfigured -> put("status", "not-configured")
@@ -55,6 +58,7 @@ class LookupAi internal constructor(
                 put("status", "done")
                 put("text", s.text)
                 put("cached", s.fromCache)
+                if (anki != null) put("anki", anki)
             }
             is AiExplanationState.Error -> {
                 put("status", "error")
