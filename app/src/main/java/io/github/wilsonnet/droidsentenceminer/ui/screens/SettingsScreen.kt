@@ -17,6 +17,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.Book
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Style
 import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
@@ -41,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import io.github.wilsonnet.droidsentenceminer.AppContainer
 import io.github.wilsonnet.droidsentenceminer.BuildConfig
 import io.github.wilsonnet.droidsentenceminer.audio.AudioCaptureManager
+import io.github.wilsonnet.droidsentenceminer.overlay.BubbleMode
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
@@ -69,7 +71,10 @@ fun SettingsScreen(modifier: Modifier = Modifier, onOpen: (String) -> Unit = {})
     }
 
     val autoInterval by container.prefs.autoOcrIntervalMs.collectAsState(initial = 400)
+    val bubbleModePreference by container.prefs.bubbleMode.collectAsState(initial = null)
+    val bubbleMode = BubbleMode.fromPreference(bubbleModePreference)
     val liveWindow by container.prefs.liveTextWindow.collectAsState(initial = true)
+    val hideOverlays by container.prefs.hideOverlaysFromCapture.collectAsState(initial = true)
     val screenDictionary by container.prefs.screenDictionary.collectAsState(initial = true)
     val pauseOnLookup by container.prefs.pauseOnLookup.collectAsState(initial = true)
     val engine by container.prefs.ocrEngine.collectAsState(initial = io.github.wilsonnet.droidsentenceminer.core.DsmPrefs.ENGINE_MEIKI)
@@ -131,6 +136,14 @@ fun SettingsScreen(modifier: Modifier = Modifier, onOpen: (String) -> Unit = {})
             "Anki",
             "Backend, deck, note type and fields" + if (ankiDeck.isNotBlank()) " · deck: $ankiDeck" else "",
         ) { onOpen(io.github.wilsonnet.droidsentenceminer.PAGE_ANKI) }
+        SettingsLink(
+            icon = Icons.Default.Settings,
+            title = "AI explanations",
+            subtitle = "Bring your own key · providers, prompts and streaming",
+        ) { onOpen(io.github.wilsonnet.droidsentenceminer.PAGE_AI) }
+
+
+        StudyLanguageCard(container)
 
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -144,9 +157,9 @@ fun SettingsScreen(modifier: Modifier = Modifier, onOpen: (String) -> Unit = {})
                         onClick = { scope.launch { container.prefs.setOcrEngine(meiki) } },
                     )
                     Column(Modifier.weight(1f)) {
-                        Text("meikiocr (recommended)", style = MaterialTheme.typography.bodyMedium)
+                        Text("meikiocr (recommended for Japanese)", style = MaterialTheme.typography.bodyMedium)
                         Text(
-                            "Trained on Japanese games: much more accurate on stylized and outlined text. " +
+                            "Japanese only. Trained on Japanese games: much more accurate on stylized and outlined text. " +
                                 if (meikiInstalled) "Installed." else "Needs a one-time 31 MB download.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -161,12 +174,14 @@ fun SettingsScreen(modifier: Modifier = Modifier, onOpen: (String) -> Unit = {})
                     Column(Modifier.weight(1f)) {
                         Text("Google ML Kit", style = MaterialTheme.typography.bodyMedium)
                         Text(
-                            "Built in, no download. Weaker on game fonts (small kana, dakuten).",
+                            "Latin, Chinese, Japanese, Korean and Devanagari recognizers. Latin and Japanese are built in; " +
+                                "the others come from Google Play services. Weaker on Japanese game fonts (small kana, dakuten).",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
                     }
                 }
+                OcrModelOptions(container, engine)
                 if (engine == meiki && !meikiInstalled) {
                     val progress = meikiProgress
                     if (progress != null) {
@@ -202,18 +217,40 @@ fun SettingsScreen(modifier: Modifier = Modifier, onOpen: (String) -> Unit = {})
                     scope.launch { container.prefs.setOcrTwoPass(value) }
                 }
                 SettingSwitch(
-                    title = "Filter non-Japanese lines",
-                    description = "Drop UI noise such as menus or numbers when Japanese text is present.",
+                    title = "Filter lines not in the study language",
+                    description = "Drop UI noise such as menus or numbers when text in the study language is present.",
                     checked = dropNoise,
                 ) { value ->
                     dropNoise = value
                     scope.launch { container.prefs.setOcrDropNoise(value) }
+                }
+                Text("Bubble tap", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Choose what one tap on the floating bubble does. Toggle auto OCR starts or stops reading; screen capture permission is requested when needed.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                BubbleMode.entries.forEach { mode ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        androidx.compose.material3.RadioButton(
+                            selected = bubbleMode == mode,
+                            onClick = { scope.launch { container.prefs.setBubbleMode(mode.preferenceValue) } },
+                        )
+                        Text(mode.label, style = MaterialTheme.typography.bodyMedium)
+                    }
                 }
                 SettingSwitch(
                     title = "Live text window",
                     description = "Show a small floating feed of new lines over the game while auto OCR runs. Tap a word to look it up, hold a line for the panel.",
                     checked = liveWindow,
                 ) { value -> scope.launch { container.prefs.setLiveTextWindow(value) } }
+                SettingSwitch(
+                    title = "Hide DSM windows from OCR",
+                    description = "The live text window and the bubble show up black to screen capture (Android's FLAG_SECURE, " +
+                        "like excluding a window from capture on PC), so an auto OCR area over the whole screen never reads them. " +
+                        "Your own screenshots and screen recordings show them black too.",
+                    checked = hideOverlays,
+                ) { value -> scope.launch { container.prefs.setHideOverlaysFromCapture(value) } }
                 SettingSwitch(
                     title = "Tap text on screen to look it up",
                     description = "While auto OCR runs, the text it reads is laid invisibly over the real subtitles or dialogue, in any app: tap a character for its word, hold and drag to select.",
@@ -327,8 +364,8 @@ fun SettingsScreen(modifier: Modifier = Modifier, onOpen: (String) -> Unit = {})
                 }
                 SettingSwitch(
                     title = "Word audio",
-                    description = "Add the word's pronunciation to the card like Yomitan: JapanesePod101, then " +
-                        "JapanesePod101 search, then Jisho. Needs internet when mining.",
+                    description = "Japanese uses JapanesePod101 and Jisho; other study languages use only your custom audio URL. " +
+                        "Needs internet when mining.",
                     checked = wordAudio,
                 ) { value -> scope.launch { container.prefs.setWordAudio(value) } }
                 if (wordAudio) {
@@ -418,7 +455,9 @@ fun SettingsScreen(modifier: Modifier = Modifier, onOpen: (String) -> Unit = {})
                         "• Yomitan by yomidevs — dictionary format, deinflection rules, popup UX\n" +
                         "• Yomihon by the Yomihon project — Kotlin dictionary parser and Japanese deinflector reference (GPL-3.0)\n" +
                         "• Jiten by Sirush — deinflection rule source\n" +
-                        "• ML Kit by Google — on-device Japanese OCR\n" +
+                        "• ML Kit by Google — on-device OCR (Latin, Chinese, Japanese, Korean, Devanagari)\n" +
+                        "• PaddleOCR by PaddlePaddle — PP-OCRv6/v5 ONNX models, downloaded on demand (Apache-2.0)\n" +
+                        "• Chimahon and Fushi by arrow-poppa — multilingual OCR model pins and lookup rules (GPL-3.0)\n" +
                         "• AnkiDroid — AnkiDroid API and FlashCards contract\n" +
                         "• meikiocr by rtr46 — game-trained OCR models (LGPL-3.0), downloaded at runtime\n" +
                         "• meikidroid by rtr46 — Android game OCR overlay reference\n" +

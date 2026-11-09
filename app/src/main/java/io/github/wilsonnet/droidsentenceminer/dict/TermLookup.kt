@@ -1,6 +1,10 @@
 package io.github.wilsonnet.droidsentenceminer.dict
 
 import androidx.room.InvalidationTracker
+import io.github.wilsonnet.droidsentenceminer.dict.lang.LanguageParsers
+import io.github.wilsonnet.droidsentenceminer.dict.lang.LookupCandidate
+import io.github.wilsonnet.droidsentenceminer.dict.lang.MultilingualEngine
+import io.github.wilsonnet.droidsentenceminer.dict.lang.TextSelection
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.util.concurrent.ConcurrentHashMap
@@ -20,10 +24,17 @@ import java.util.concurrent.atomic.AtomicBoolean
  * Both read term rows without their glossary ([TermHead]) first; [lookup] then fetches the
  * glossaries of the rows that matched by id, [scan] never does. With big monolingual
  * dictionaries installed a line scan matches thousands of rows of kilobytes each.
+ *
+ * Every entry point takes a `language` (BCP-47 base code, default `ja`). `ja` is the path above,
+ * untouched. Other languages go through [MultilingualEngine]: space-delimited languages select
+ * whole words (plus verified expressions), Chinese and other unspaced scripts a dictionary-aware
+ * longest match, and candidates come from [LanguageParsers] instead of the Japanese deinflector.
  */
-class TermLookup(
-    private val db: DictDatabase,
+class TermLookup internal constructor(
+    private val store: LookupStore,
 ) {
+    constructor(db: DictDatabase) : this(RoomLookupStore(db))
+
     data class LookupDetails(
         val surface: String,
         val terms: List<TermResult>,
@@ -85,7 +96,7 @@ class TermLookup(
         val reasons: List<String>,
     )
 
-    private data class ScanKey(val text: String, val maxLength: Int)
+    private data class ScanKey(val text: String, val maxLength: Int, val language: String)
 
     // A tap scans its whole line (wordAt), the tap re-read scans it again, and neighbouring taps
     // hit the same subtitle: keep the last lines. Cleared on any dictionary write; a result
@@ -109,11 +120,7 @@ class TermLookup(
      */
     private fun ensureObserving() {
         if (!observing.compareAndSet(false, true)) return
-        db.invalidationTracker.addObserver(
-            object : InvalidationTracker.Observer(arrayOf("dictionaries")) {
-                override fun onInvalidated(tables: Set<String>) = invalidateCaches()
-            },
-        )
+        store.observeDictionaryChanges { invalidateCaches() }
     }
 
     /** Drops every cache; Room calls it whenever the dictionaries table is written. */
@@ -122,6 +129,7 @@ class TermLookup(
         scanCache.clear()
         tagCache.clear()
         enabledCache = null
+        multilingual.invalidateCaches()
     }
 
     /**
@@ -129,12 +137,17 @@ class TermLookup(
      * carry no glossary, sequence or term tags (empty / 0): callers only need the ranges and headwords; use
      * [lookup] for definitions. Cached per text until a dictionary table changes.
      */
-    suspend fun scan(text: String, maxLength: Int = MAX_TERM_LENGTH): List<ScannedWord> = withContext(Dispatchers.Default) {
+    suspend fun scan(
+        text: String,
+        maxLength: Int = MAX_TERM_LENGTH,
+        language: String = DEFAULT_LANGUAGE,
+    ): List<ScannedWord> = withContext(Dispatchers.Default) {
         if (text.isBlank()) return@withContext emptyList()
-        val key = ScanKey(text, maxLength)
+        val code = LanguageParsers.normalizeCode(language)
+        val key = ScanKey(text, maxLength, code)
         scanCache[key]?.let { return@withContext it }
         val generation = cacheGeneration
-        val words = scanUncached(text, maxLength)
+        val words = if (code == DEFAULT_LANGUAGE) scanUncached(text, maxLength) else multilingual.scan(text, maxLength, code)
         if (generation == cacheGeneration) scanCache[key] = words
         words
     }
@@ -247,17 +260,41 @@ class TermLookup(
      * character (tapping ル in ハトヤホテル gives ホテル), else the longest word starting there,
      * else the character alone.
      */
-    suspend fun wordAt(text: String, index: Int): IntRange {
-        scan(text).firstOrNull { index >= it.start && index < it.end }?.let { return it.start until it.end }
-        val from = scan(text.substring(index, minOf(text.length, index + MAX_TERM_LENGTH))).firstOrNull { it.start == 0 }
-        return index until index + (from?.text?.length ?: 1)
+    suspend fun wordAt(text: String, index: Int, language: String = DEFAULT_LANGUAGE): IntRange {
+        if (text.isEmpty()) return 0 until 0
+        val at = index.coerceIn(0, text.lastIndex)
+        val code = LanguageParsers.normalizeCode(language)
+        if (code != DEFAULT_LANGUAGE) return multilingual.rangeAt(text, at, code)
+        scan(text).firstOrNull { at >= it.start && at < it.end }?.let { return it.start until it.end }
+        val from = scan(text.substring(at, minOf(text.length, at + MAX_TERM_LENGTH))).firstOrNull { it.start == 0 }
+        return at until at + (from?.text?.length ?: 1)
     }
 
-    suspend fun lookup(word: String, allowDeinflection: Boolean = true): LookupDetails = withContext(Dispatchers.Default) {
+    /**
+     * What a tap on [text] at [index] selects, with the forms to look it up by. [TextSelection.surface]
+     * is exactly the selected substring of [text] (never the lemma); offsets are UTF-16 indices into [text].
+     */
+    suspend fun selectionAt(text: String, index: Int, language: String = DEFAULT_LANGUAGE): TextSelection {
+        val code = LanguageParsers.normalizeCode(language)
+        val range = wordAt(text, index, code)
+        val start = range.first
+        val end = range.last + 1
+        val surface = text.substring(start, end)
+        val candidates = withContext(Dispatchers.Default) { LanguageParsers.forLanguage(code).candidates(surface) }
+        return TextSelection(surface, code, text, start, end, candidates, LanguageParsers.analyzer(code))
+    }
+
+    suspend fun lookup(
+        word: String,
+        allowDeinflection: Boolean = true,
+        language: String = DEFAULT_LANGUAGE,
+    ): LookupDetails = withContext(Dispatchers.Default) {
         val dicts = dictionariesByPriority()
         if (dicts.isEmpty() || word.isBlank()) {
             return@withContext LookupDetails(surface = word, terms = emptyList(), frequencies = emptyList(), kanji = emptyList())
         }
+        val code = LanguageParsers.normalizeCode(language)
+        if (code != DEFAULT_LANGUAGE) return@withContext lookupLanguage(word, allowDeinflection, code, dicts)
 
         val candidates = if (allowDeinflection) {
             JapaneseDeinflector.deinflect(word)
@@ -306,11 +343,33 @@ class TermLookup(
 
     private class HeadMatch(val head: TermHead, val dict: DictionaryEntity, val form: String, val reasons: List<String>)
 
+    private suspend fun lookupLanguage(
+        word: String,
+        allowDeinflection: Boolean,
+        code: String,
+        dicts: Map<Long, DictionaryEntity>,
+    ): LookupDetails {
+        val candidates = if (allowDeinflection) {
+            LanguageParsers.forLanguage(code).candidates(word)
+        } else {
+            listOf(LookupCandidate(word, emptySet(), emptyList()))
+        }
+        val result = multilingual.lookup(candidates)
+        val forms = candidates.map { it.text }.distinct()
+        return LookupDetails(
+            surface = word,
+            terms = result.terms,
+            frequencies = lookupTermMeta(forms, dicts),
+            kanji = lookupKanji(word.filter { isKanji(it) }.map { it.toString() }.distinct()),
+            deinflection = result.terms.flatMap { it.deinflectionReasons }.filter { it.isNotBlank() }.distinct(),
+        )
+    }
+
     suspend fun lookupKanji(characters: List<String>): List<KanjiResult> = withContext(Dispatchers.Default) {
         if (characters.isEmpty()) return@withContext emptyList()
         val dicts = dictionariesByPriority()
         if (dicts.isEmpty()) return@withContext emptyList()
-        val rows = db.kanjiDao().findByCharacters(characters)
+        val rows = store.kanji(characters)
         rows.mapNotNull { row ->
             val dict = dicts[row.dictId] ?: return@mapNotNull null
             KanjiResult(
@@ -330,7 +389,7 @@ class TermLookup(
         enabledCache?.let { return it }
         ensureObserving()
         val generation = cacheGeneration
-        val loaded = db.dictionaryDao().getEnabled().associateBy { it.id }
+        val loaded = store.enabledDictionaries().associateBy { it.id }
         if (generation == cacheGeneration) enabledCache = loaded
         return loaded
     }
@@ -340,7 +399,7 @@ class TermLookup(
         if (forms.isEmpty()) return emptyMap()
         val result = HashMap<String, MutableList<TermHead>>()
         forms.chunked(TERM_CHUNK).forEach { chunk ->
-            for (row in db.termDao().findHeadsByForms(chunk)) {
+            for (row in store.heads(chunk)) {
                 result.getOrPut(row.expression) { mutableListOf() }.add(row)
                 if (row.reading.isNotBlank() && row.reading != row.expression) {
                     result.getOrPut(row.reading) { mutableListOf() }.add(row)
@@ -354,33 +413,28 @@ class TermLookup(
         if (ids.isEmpty()) return emptyMap()
         val result = HashMap<Long, TermBody>(ids.size * 2)
         ids.distinct().chunked(DB_CHUNK).forEach { chunk ->
-            db.termDao().findBodies(chunk).forEach { result[it.id] = it }
+            store.bodies(chunk).forEach { result[it.id] = it }
         }
         return result
     }
 
     /** [body] null: a scan hit, which carries no glossary, sequence or term tags. */
-    private fun TermHead.toResult(dict: DictionaryEntity, body: TermBody?, matchedForm: String, reasons: List<String>) = TermResult(
-        dictId = dictId,
-        dictionaryTitle = dict.title,
-        dictionaryPriority = dict.priority,
-        expression = expression,
-        reading = reading,
-        definitionTags = definitionTags,
-        rules = rules,
-        score = score,
-        glossaryJson = body?.glossaryJson.orEmpty(),
-        sequence = body?.sequence ?: 0L,
-        termTags = body?.termTags.orEmpty(),
-        matchedForm = matchedForm,
-        deinflectionReasons = reasons,
+    private fun TermHead.toResult(dict: DictionaryEntity, body: TermBody?, matchedForm: String, reasons: List<String>) =
+        toTermResult(dict, body, matchedForm, reasons)
+
+    /** Non-Japanese languages: selection, scans and lookups (see [MultilingualEngine]). */
+    private val multilingual = MultilingualEngine(
+        store = store,
+        dictionaries = { dictionariesByPriority() },
+        queryHeads = { forms -> queryHeadsByForms(forms) },
+        queryBodies = { ids -> queryBodies(ids) },
     )
 
     private suspend fun lookupTermMeta(forms: List<String>, dicts: Map<Long, DictionaryEntity>): List<TermMetaResult> {
         if (forms.isEmpty()) return emptyList()
         val result = mutableListOf<TermMetaResult>()
         forms.chunked(DB_CHUNK).forEach { chunk ->
-            db.metaDao().findTermMeta(chunk).forEach { row ->
+            store.termMeta(chunk).forEach { row ->
                 val dict = dicts[row.dictId] ?: return@forEach
                 result += TermMetaResult(
                     dictId = row.dictId,
@@ -403,7 +457,7 @@ class TermLookup(
             emptyMap()
         } else {
             val generation = cacheGeneration
-            val rows = db.tagDao().categorized(missing).groupBy { it.dictId }
+            val rows = store.categorizedTags(missing).groupBy { it.dictId }
                 .mapValues { (_, tags) -> tags.associate { it.name to it.category } }
             if (generation == cacheGeneration) missing.forEach { tagCache[it] = rows[it].orEmpty() }
             rows
@@ -439,6 +493,7 @@ class TermLookup(
     }
 
     companion object {
+        const val DEFAULT_LANGUAGE = "ja"
         private const val MAX_TERM_LENGTH = 16
         private const val DB_CHUNK = 800
 
@@ -487,4 +542,70 @@ internal class LruCache<K, V>(private val maxSize: Int) {
 
     @Synchronized
     fun size(): Int = map.size
+}
+
+/** [body] null: a scan hit, which carries no glossary, sequence or term tags. */
+internal fun TermHead.toTermResult(dict: DictionaryEntity, body: TermBody?, matchedForm: String, reasons: List<String>) = TermResult(
+    dictId = dictId,
+    dictionaryTitle = dict.title,
+    dictionaryPriority = dict.priority,
+    expression = expression,
+    reading = reading,
+    definitionTags = definitionTags,
+    rules = rules,
+    score = score,
+    glossaryJson = body?.glossaryJson.orEmpty(),
+    sequence = body?.sequence ?: 0L,
+    termTags = body?.termTags.orEmpty(),
+    matchedForm = matchedForm,
+    deinflectionReasons = reasons,
+)
+
+/**
+ * What [TermLookup] reads from the dictionary database: the seam unit tests replace with an
+ * in-memory fake. Read-only; the schema is untouched.
+ */
+internal interface LookupStore {
+    suspend fun enabledDictionaries(): List<DictionaryEntity>
+
+    /** See [TermDao.findHeadsByForms]: keep [forms] at most 450 long. */
+    suspend fun heads(forms: List<String>): List<TermHead>
+
+    suspend fun bodies(ids: List<Long>): List<TermBody>
+
+    suspend fun termMeta(forms: List<String>): List<TermMetaEntity>
+
+    suspend fun kanji(characters: List<String>): List<KanjiEntity>
+
+    suspend fun categorizedTags(dictIds: List<Long>): List<TagEntity>
+
+    /** Whether any term of [dictId] has non-empty `rules` (part of speech); false = a POS-less dictionary. */
+    suspend fun dictionaryHasRules(dictId: Long): Boolean
+
+    /** Calls [onChange] whenever the `dictionaries` table is written. */
+    fun observeDictionaryChanges(onChange: () -> Unit)
+}
+
+internal class RoomLookupStore(private val db: DictDatabase) : LookupStore {
+    override suspend fun enabledDictionaries() = db.dictionaryDao().getEnabled()
+
+    override suspend fun heads(forms: List<String>) = db.termDao().findHeadsByForms(forms)
+
+    override suspend fun bodies(ids: List<Long>) = db.termDao().findBodies(ids)
+
+    override suspend fun termMeta(forms: List<String>) = db.metaDao().findTermMeta(forms)
+
+    override suspend fun kanji(characters: List<String>) = db.kanjiDao().findByCharacters(characters)
+
+    override suspend fun categorizedTags(dictIds: List<Long>) = db.tagDao().categorized(dictIds)
+
+    override suspend fun dictionaryHasRules(dictId: Long) = db.termDao().hasRules(dictId)
+
+    override fun observeDictionaryChanges(onChange: () -> Unit) {
+        db.invalidationTracker.addObserver(
+            object : InvalidationTracker.Observer(arrayOf("dictionaries")) {
+                override fun onInvalidated(tables: Set<String>) = onChange()
+            },
+        )
+    }
 }

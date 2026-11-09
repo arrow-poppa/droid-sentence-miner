@@ -2,6 +2,13 @@
 
 [← README](../README.md) · [Features](features.md) · [Usage](usage.md) · [Architecture](architecture.md) · [Building](building.md) · [Validation](validation.md) · [Roadmap](roadmap.md)
 
+## Multilingual implementation branch
+
+Multilingual lookup keeps Room/Yomitan unchanged. `dict/lang` produces candidates and UTF-16 spans; `AppContainer.scanText/wordRange/lookupWord` pass the chosen study language. `ai` owns provider transport, Keystore credentials, SSE and cache; lookup composition owns cancellation. See [contracts and support](multilingual.md).
+
+English hyphenated probes preserve source punctuation; `LookupCandidate.normalizationOrder` ranks
+hyphen spellings before spaced and joined alternatives in both parser candidates and lookup/scan results.
+
 ## Pipeline
 
 ```

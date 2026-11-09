@@ -2,6 +2,28 @@
 
 [← README](../README.md) · [Features](features.md) · [Usage](usage.md) · [Architecture](architecture.md) · [Building](building.md) · [Validation](validation.md) · [Roadmap](roadmap.md)
 
+## Multilingual implementation branch
+
+CI [42420278351](https://github.com/arrow-poppa/droid-sentence-miner/actions/runs/42420278351),
+commit `e720d86`: **391 unit tests, 0 skipped, 0 failed/errors**, 47 suites, including 107 AI tests.
+The unit-test and debug-APK compilation steps succeeded on Ubuntu/JDK 21. Both branch-push and
+fork-PR checks passed, including the wrapped-text follow-up. Baseline was 205 tests at `04f1756`; earlier failed integration
+runs exposed test-helper, grammar, header-redaction, cancellation-fixture and catalog assumptions,
+which were fixed before this passing run.
+
+No local compilation or inference benchmarks were run. `adb devices -l` found no physical device;
+no emulator was started. The user chose CI-only validation for now. Android model inference/module delivery, geometry/RTL/rotation, Keystore,
+popup interactions and Anki/audio end-to-end checks remain unverified. Provider tests use mocked
+HTTP on the CI runner; no live paid APIs were called. The website was not built in this continuation.
+
+The downloaded CI APK is 155,340,251 bytes and contains arm64-v8a, armeabi-v7a and x86_64 native
+libraries. SHA-256: `611789507dd9e18b5315c947bf761b506bc2f90856c5ef6ab866e40210156a79`.
+ZIP inspection verifies packaging only, not runtime behavior. No release was published.
+
+A lightweight check of the already-downloaded pinned Paddle YAML files compared the Kotlin parser's
+scalar rules with PyYAML: all six recognizer vocabularies matched (6,904; 18,708; 850; 747;
+354; 11,945 entries). This checked vocabulary parsing only; it did not run inference or compilation.
+
 What was measured, on which device, and how. Recipes and scripts: [`.opencode/skills/dsm-ocr-eval`](../.opencode/skills/dsm-ocr-eval/SKILL.md), [`dsm-audio`](../.opencode/skills/dsm-audio/SKILL.md), [`dsm-debug-api`](../.opencode/skills/dsm-debug-api/SKILL.md), `tools/`.
 
 - Lookup speed with 8 dictionaries (~2.1 M rows: Jitendex, Kanjium, Pixiv, 広辞苑, 三省堂, 実用日本語表現,

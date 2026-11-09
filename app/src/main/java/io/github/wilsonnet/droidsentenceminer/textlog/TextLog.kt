@@ -66,7 +66,8 @@ class TextLog(
      * line's sentence, screenshot and audio; anything else is logged as a new manual line.
      */
     suspend fun lineForSharedText(text: String): TextLineEntity = withContext(Dispatchers.IO) {
-        val cleaned = TextSimilarity.clean(text)
+        val profile = io.github.wilsonnet.droidsentenceminer.ocr.TextProfile.forLanguage(prefs.studyLanguage.first())
+        val cleaned = TextSimilarity.clean(text, profile.spaceDelimited)
         val compact = cleaned.filterNot { it.isWhitespace() }
         dao.recent(SHARED_MATCH_LINES).firstOrNull { line ->
             val lineText = line.text.filterNot { it.isWhitespace() }

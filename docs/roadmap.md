@@ -28,3 +28,10 @@ Ideas and known gaps, roughly in priority order. Shipped work moves to [CHANGELO
   frame-injection test path.
 - Optional ASR engines (e.g. whisper.cpp or Moonshine via JNI) as an alternative/complement to OCR
   for games with hard-to-read fonts.
+
+- Multilingual hardening: physical-device ML Kit module delivery, PaddleOCR geometry/RTL accuracy,
+  and Japanese OCR/Anki regression validation with the integrated parser and BYOK popup.
+- NCNN FP16 backend and measured ONNX/NCNN comparison; not implemented.
+- Secondary OCR: port/validate Indra ONNX with separate model-license handling; verify distribution
+  rights and Android artifacts before considering OneOCR/ScreenAI; use documented permitted APIs
+  for online Lens/Bing. See `multilingual.md` for source evidence.

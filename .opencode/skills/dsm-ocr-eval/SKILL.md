@@ -12,6 +12,18 @@ Scripts live in `tools/ocr-eval/`. Metric: character error rate (CER, edit dista
 ground-truth chars, punctuation and spaces ignored) and exact-line rate. Always compare engines
 on the **same crops**.
 
+## Multilingual branch verification
+
+Never compile locally: use the GitHub CI APK (see `docs/building.md`). Desktop Paddle fixtures
+verify the model contract only, not Android accuracy, geometry or performance. ML Kit boxes must
+map from the upscaled bitmap back to the input crop (`OcrGeometry`); test symbol boxes separately.
+Use the same crops with the selected study-language profile, preserve absent confidence as null,
+and measure RTL order and approximate glyph geometry independently. During live tests, switch
+study language/engine and verify that AutoOcrController restarts its tracker on the next poll.
+Check both the screen layer and stored lines: wrapped Cyrillic/Arabic/accented Latin rows must
+retain spaces in `TextLineTracker`, not just in the OCR result. Current status/matrix:
+`docs/multilingual.md` and `docs/integration-state.md`.
+
 ## Data sets
 
 1. **Unbiased (preferred)** — burn a real subtitle file onto real footage; ground truth is exact:

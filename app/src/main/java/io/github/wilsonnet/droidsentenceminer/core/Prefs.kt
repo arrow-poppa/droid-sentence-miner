@@ -37,6 +37,10 @@ class DsmPrefs(private val context: Context) {
         val ocrTwoPass = booleanPreferencesKey("ocr_two_pass")
         val ocrDropNoise = booleanPreferencesKey("ocr_drop_noise")
         val ocrEngine = stringPreferencesKey("ocr_engine")
+        val studyLanguage = stringPreferencesKey("study_language")
+        val ocrMlKitScript = stringPreferencesKey("ocr_mlkit_script")
+        val ocrPaddleRecognizer = stringPreferencesKey("ocr_paddle_recognizer")
+        val ocrPaddleDetector = stringPreferencesKey("ocr_paddle_detector")
         val audioEnabled = booleanPreferencesKey("audio_enabled")
         val audioTrim = booleanPreferencesKey("audio_trim")
         val audioMicFallback = booleanPreferencesKey("audio_mic_fallback")
@@ -58,6 +62,7 @@ class DsmPrefs(private val context: Context) {
         val autoAreasPortrait = stringPreferencesKey("auto_areas_portrait")
         val autoAreasLandscape = stringPreferencesKey("auto_areas_landscape")
         val liveTextWindow = booleanPreferencesKey("live_text_window")
+        val hideOverlaysFromCapture = booleanPreferencesKey("hide_overlays_from_capture")
         val screenDictionary = booleanPreferencesKey("screen_dictionary")
         val bubbleMode = stringPreferencesKey("bubble_mode")
         val pauseOnLookup = booleanPreferencesKey("pause_on_lookup")
@@ -99,6 +104,21 @@ class DsmPrefs(private val context: Context) {
 
     /** [ENGINE_MEIKI] (game-trained, needs a model download) or [ENGINE_MLKIT]. */
     val ocrEngine: Flow<String> = context.dataStore.data.map { it[Keys.ocrEngine] ?: ENGINE_MEIKI }
+
+    /**
+     * BCP-47 code of the language being studied (dictionary language): drives the lookup parser,
+     * which OCR text is kept, and the automatic OCR choices. Independent of the OCR engine.
+     */
+    val studyLanguage: Flow<String> = context.dataStore.data.map { it[Keys.studyLanguage] ?: DEFAULT_STUDY_LANGUAGE }
+
+    /** ML Kit script recognizer id ([io.github.wilsonnet.droidsentenceminer.ocr.MlKitScript]) or [AUTO]. */
+    val ocrMlKitScript: Flow<String> = context.dataStore.data.map { it[Keys.ocrMlKitScript] ?: AUTO }
+
+    /** PaddleOCR recognizer id ([io.github.wilsonnet.droidsentenceminer.ocr.PaddleRecognizer]) or [AUTO]. */
+    val ocrPaddleRecognizer: Flow<String> = context.dataStore.data.map { it[Keys.ocrPaddleRecognizer] ?: AUTO }
+
+    /** PaddleOCR detector component id (det_tiny / det_small). */
+    val ocrPaddleDetector: Flow<String> = context.dataStore.data.map { it[Keys.ocrPaddleDetector] ?: "det_tiny" }
     val audioEnabled: Flow<Boolean> = context.dataStore.data.map { it[Keys.audioEnabled] ?: true }
     // Off by default: energy VAD can't separate voice from loud BGM/ambience reliably.
     val audioTrim: Flow<Boolean> = context.dataStore.data.map { it[Keys.audioTrim] ?: false }
@@ -168,6 +188,13 @@ class DsmPrefs(private val context: Context) {
 
     suspend fun setLiveTextWindow(value: Boolean) = edit { it[Keys.liveTextWindow] = value }
 
+    /**
+     * DSM's own floating windows (live text window, bubble) are `FLAG_SECURE`: screen capture and
+     * screenshots see them black, so a full-screen auto OCR area never reads (and logs) them.
+     */
+    val hideOverlaysFromCapture: Flow<Boolean> = context.dataStore.data.map { it[Keys.hideOverlaysFromCapture] ?: true }
+    suspend fun setHideOverlaysFromCapture(value: Boolean) = edit { it[Keys.hideOverlaysFromCapture] = value }
+
     /** Tap the real on-screen text (over any app) to look it up while auto OCR runs. */
     val screenDictionary: Flow<Boolean> = context.dataStore.data.map { it[Keys.screenDictionary] ?: true }
     suspend fun setScreenDictionary(value: Boolean) = edit { it[Keys.screenDictionary] = value }
@@ -180,7 +207,7 @@ class DsmPrefs(private val context: Context) {
         it[if (landscape) Keys.liveWindowYLand else Keys.liveWindowY] = y
     }
 
-    /** What a bubble tap does: an `overlay.BubbleMode` name (quick, region); quick lookup by default. */
+    /** What a bubble tap does: an `overlay.BubbleMode` name (quick, region, auto_ocr); quick lookup by default. */
     val bubbleMode: Flow<String?> = context.dataStore.data.map { it[Keys.bubbleMode] }
     suspend fun setBubbleMode(value: String) = edit { it[Keys.bubbleMode] = value }
 
@@ -259,6 +286,10 @@ class DsmPrefs(private val context: Context) {
     suspend fun setOcrTwoPass(value: Boolean) = edit { it[Keys.ocrTwoPass] = value }
     suspend fun setOcrDropNoise(value: Boolean) = edit { it[Keys.ocrDropNoise] = value }
     suspend fun setOcrEngine(value: String) = edit { it[Keys.ocrEngine] = value }
+    suspend fun setStudyLanguage(value: String) = edit { it[Keys.studyLanguage] = value }
+    suspend fun setOcrMlKitScript(value: String) = edit { it[Keys.ocrMlKitScript] = value }
+    suspend fun setOcrPaddleRecognizer(value: String) = edit { it[Keys.ocrPaddleRecognizer] = value }
+    suspend fun setOcrPaddleDetector(value: String) = edit { it[Keys.ocrPaddleDetector] = value }
     suspend fun setAudioEnabled(value: Boolean) = edit { it[Keys.audioEnabled] = value }
     suspend fun setAudioTrim(value: Boolean) = edit { it[Keys.audioTrim] = value }
     suspend fun setAudioMicFallback(value: Boolean) = edit { it[Keys.audioMicFallback] = value }
@@ -345,6 +376,12 @@ class DsmPrefs(private val context: Context) {
         const val DEFAULT_AUDIO_BUFFER_SECONDS = 300
         const val ENGINE_MEIKI = "meiki"
         const val ENGINE_MLKIT = "mlkit"
+        const val ENGINE_PADDLE = "paddle"
+
+        /** Pick per study language (see OcrEngineRegistry). */
+        const val ENGINE_AUTO = "auto"
+        const val AUTO = "auto"
+        const val DEFAULT_STUDY_LANGUAGE = "ja"
     }
 }
 

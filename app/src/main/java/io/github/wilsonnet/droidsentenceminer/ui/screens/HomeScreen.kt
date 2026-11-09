@@ -145,7 +145,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                 return@launch
             }
             val text = result.text.trim()
-            val matches = if (text.isBlank()) emptyList() else container.lookup.scan(text)
+            val matches = if (text.isBlank()) emptyList() else container.scanText(text)
             testImage = bitmap
             testText = text
             testMatches = matches
@@ -175,7 +175,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
     ) {
         Text("Droid Sentence Miner", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
         Text(
-            "OCR Japanese text from any app, look words up with Yomitan dictionaries and mine them straight to Anki.",
+            "OCR text from any app, look words up with Yomitan dictionaries and mine them straight to Anki.",
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -369,7 +369,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                 Text("Recent mined cards", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
                 if (recentCards.isEmpty()) {
                     Text(
-                        "Nothing yet. Scan some Japanese and tap Add to Anki.",
+                        "Nothing yet. Scan text in your study language and tap Add to Anki.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -413,7 +413,7 @@ fun HomeScreen(modifier: Modifier = Modifier) {
                 Text("Getting started", fontWeight = FontWeight.SemiBold)
                 Text("1. Import a Yomitan dictionary (Jitendex or JMdict) in Settings → Dictionaries", style = MaterialTheme.typography.bodySmall)
                 Text("2. Configure Anki in Settings → Anki", style = MaterialTheme.typography.bodySmall)
-                Text("3. Start the floating bubble and tap it over Japanese text", style = MaterialTheme.typography.bodySmall)
+                Text("3. Start the floating bubble and tap it over text in your study language", style = MaterialTheme.typography.bodySmall)
             }
         }
     }

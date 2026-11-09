@@ -33,24 +33,20 @@ exact Homebrew path.
 
 ## Build and test
 
-```bash
-./gradlew testDebugUnitTest    # JVM unit tests
-./gradlew assembleDebug        # app/build/outputs/apk/debug/app-debug.apk
-```
-
-For on-device tests, point Gradle at one device. `connectedAndroidTest` uninstalls the app when it
-finishes, wiping dictionaries and settings, and Gradle otherwise targets every connected device:
+In this workspace builds and compilation run only on GitHub Actions: the development PC has
+9.5 GB RAM. Do not run Gradle or launch an emulator locally.
 
 ```bash
-ANDROID_SERIAL=emulator-5554 ./gradlew connectedDebugAndroidTest
+gh workflow run ci.yml --ref feature/multilingual-ocr-parser-byok -R arrow-poppa/droid-sentence-miner
+gh run list -R arrow-poppa/droid-sentence-miner --workflow ci.yml --limit 5
+gh run view <run-id> -R arrow-poppa/droid-sentence-miner --log-failed
+gh run download <run-id> -R arrow-poppa/droid-sentence-miner -n app-debug -D /tmp/dsm-apk
+adb -s <physical-serial> install -r /tmp/dsm-apk/app-debug.apk
 ```
 
-Single test class:
-
-```bash
-ANDROID_SERIAL=emulator-5554 ./gradlew connectedDebugAndroidTest \
-  -Pandroid.testInstrumentationRunnerArguments.class=io.github.wilsonnet.droidsentenceminer.audio.AudioPipelineInstrumentedTest
-```
+The runner executes unit tests and assembles the APK with JDK 21. Use a physical device for
+OCR/overlay/Anki checks. Instrumentation can uninstall the app and wipe its dictionaries;
+use a dedicated test installation. See the repository's `docs/building.md` for current commands.
 
 ## Install
 

@@ -87,6 +87,9 @@ changes can be validated with `curl` on a real device. Before opening a PR, read
 in the same commit ([checklist](.opencode/skills/dsm-docs/SKILL.md)). The website lives in
 [`site/`](site/) (Astro + Starlight).
 
+Multilingual development is tracked on `feature/multilingual-ocr-parser-byok`; see
+[capabilities and validation gaps](docs/multilingual.md).
+
 ## Credits
 
 This project stands on the shoulders of these projects — thank you:
@@ -122,6 +125,10 @@ This project stands on the shoulders of these projects — thank you:
   modifications to EDICT, KANJIDIC or KRADFILE were provided by Uros O. through his free database."
 - **[Jitendex](https://jitendex.org/)** and **[jmDict for Yomitan](https://github.com/yomidevs/jmdict-yomitan)**
   — the one-click recommended dictionaries (installed from their official releases).
+
+- **[Chimahon](https://github.com/arrow-poppa/chimahon)** and **[Fushi](https://github.com/arrow-poppa/Fushi)** (GPL-3.0) — multilingual rules and English selection/irregulars.
+- **[Yomitan BYOK](https://github.com/arrow-poppa/yomitan-byok-ai)** (GPL-3.0) — contextual AI provider behavior.
+- **PaddlePaddle** (Apache-2.0 model artifacts) — pinned PaddleOCR ONNX models downloaded on demand.
 
 Droid Sentence Miner is not affiliated with Anki, AnkiDroid, Yomitan, Jiten or GameSentenceMiner.
 

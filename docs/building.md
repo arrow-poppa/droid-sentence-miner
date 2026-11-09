@@ -4,29 +4,25 @@
 
 ## Android app
 
-No Android Studio required.
+Builds and compilation for this workspace run **only on GitHub Actions**; the development PC
+has 9.5 GB RAM. Do not run Gradle or start an emulator locally.
 
 ```bash
-# 1. Toolchain — JDK 21 + Android CLI (Linux example, no root needed)
-curl -fsSL https://dl.google.com/android/cli/latest/linux_x86_64/install.sh | bash
-mkdir -p ~/Android/tools && curl -sSL "https://api.adoptium.net/v3/binary/latest/21/ga/linux/x64/jdk/hotspot/normal/eclipse" | tar xz -C ~/Android/tools
-export JAVA_HOME=$(echo ~/Android/tools/jdk-21*)      # macOS: brew install openjdk@21
-export ANDROID_HOME=$HOME/Android/Sdk
-export PATH="$JAVA_HOME/bin:$ANDROID_HOME/platform-tools:$PATH"
-
-# 2. Android SDK packages
-android sdk install platform-tools platforms/android-36 build-tools/35.0.0 emulator \
-                    system-images/android-35/google_apis_playstore/x86_64
-echo "sdk.dir=$ANDROID_HOME" > local.properties
-
-# 3. Build & test
-./gradlew testDebugUnitTest          # 191 JVM unit tests
-./gradlew connectedDebugAndroidTest  # 4 on-device tests (VAD + AAC encoding)
-./gradlew assembleDebug              # app/build/outputs/apk/debug/app-debug.apk
-
-# 4. Install
-adb install -r app/build/outputs/apk/debug/app-debug.apk
+# A branch push triggers unit tests and assembleDebug on GitHub's runner.
+# Or request the workflow explicitly:
+gh workflow run ci.yml --ref feature/multilingual-ocr-parser-byok -R arrow-poppa/droid-sentence-miner
+gh run list -R arrow-poppa/droid-sentence-miner --workflow ci.yml --limit 5
+gh run view <run-id> -R arrow-poppa/droid-sentence-miner --log-failed
+gh run download <run-id> -R arrow-poppa/droid-sentence-miner -n app-debug -D /tmp/dsm-apk
+# Install the downloaded artifact on an explicitly selected physical device:
+adb -s <serial> install -r /tmp/dsm-apk/app-debug.apk
 ```
+
+The CI runner uses JDK 21 and runs `./gradlew testDebugUnitTest assembleDebug --console=plain --continue`.
+The verified code revision `e720d86` passed **391 JVM unit tests** (0 skipped, 0 failed) in GitHub Actions.
+Both the branch and fork-PR checks passed; see the current integration state.
+Final test evidence belongs in [validation.md](validation.md); device instrumentation remains separate
+and must not uninstall a personal dictionary collection.
 
 Debug builds are labelled "Droid Sentence Miner (Dev)", have a localhost debug API for driving the app over adb (see [`.opencode/skills/dsm-debug-api`](../.opencode/skills/dsm-debug-api/SKILL.md)) and are signed with the committed `app/debug.keystore`, so they upgrade each other in place. Release builds come from the [release workflow](../.github/workflows/release.yml) on a `v*` tag.
 

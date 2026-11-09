@@ -6,6 +6,37 @@ versions are the `v*` tags that publish a signed APK on
 
 ## [Unreleased]
 
+### Added
+- *Bubble tap → Toggle auto OCR* starts or stops auto OCR with one tap, with start/stop feedback. Choose it in Settings → OCR or the bubble's long-press menu; screen-sharing consent and text-area selection open when needed.
+- Independent study-language, OCR engine and script/model settings; all five ML Kit script recognizers and an official language catalog.
+- On-demand, checksum-verified PaddleOCR ONNX models for Latin, Chinese/Japanese, Cyrillic, Arabic, Greek and Korean (Android inference validation pending).
+- Language-aware dictionary selection and morphology, including English irregulars, phrasal verbs and dictionary-validated hyphenated compounds; original text offsets are retained.
+- Optional BYOK explanations in lookup popups through one Custom OpenAI-compatible provider (endpoint, key, model, OpenRouter routing/fallbacks, thinking mode/effort, request body JSON, test connection), streaming, cancellation, cache and encrypted API keys.
+
+### Changed
+- The AI explanation sits at the top of the lookup popup, above the dictionary entries, in Yomitan's style (accent bar, ↻ regenerate, streaming caret, Copy); generates on lookup by default once AI is enabled.
+- Anki fields *AI explanation* (`{ai-explanation}`) and *Popup selection* (`{popup-selection-text}`): the popup's finished explanation and the text last selected in it, auto-matched to fields such as *AI Explanation* and *SelectionText*.
+- An **Anki** button in the AI box sends the finished explanation to the word's card as plain text: it fills the AI explanation field of the existing note (AnkiDroid `updateNoteFields` / AnkiConnect `updateNoteFields`), or adds the card with it when the word has none yet.
+- *Hide DSM windows from OCR* (on by default): the live text window and the bubble are `FLAG_SECURE`, so MediaProjection and screenshots see them black — auto OCR over the whole screen no longer reads and logs the live window's own text (Android's counterpart of excluding a window from capture on PC).
+- PaddleOCR settings work like Chimahon's: each recognizer (Latin Tiny, Multilingual, Cyrillic, Arabic, Greek, Korean) is its own engine option, the detector (Tiny/Small) is always selectable, picking downloads the needed det + rec, and a *PaddleOCR models* list downloads/deletes any model. Before, the det/rec pickers only appeared when PaddleOCR was already the engine in use.
+- AI settings offer only the Custom provider, with all of its options; settings saved for OpenAI/Gemini/DeepSeek/OpenRouter move to it. New *Cancel unfinished requests* option.
+
+### Fixed
+- English hyphenated lookups such as *open-source* and *state-of-the-art* also match dictionary spellings with spaces or no hyphens, in that order, while retaining the full original surface and offsets. Tapping either part (or an internal hyphen) uses the compound when matched; otherwise parts remain separate. Punctuation dashes never join words.
+- The screen-dictionary popup closed by itself: its tap re-check read the popup's own definition as screen text (full-screen areas) and put tap layers over it, and closed it whenever the re-read lost the word (e.g. player controls shown by the pause). Text under the popup is ignored now and the popup stays open.
+- Long AI explanations were cut off in the popup: the box is now part of the definition page and scrolls with it.
+- Screen dictionary taps on Latin/Cyrillic/Korean text with spaces land on the word under the finger: ML Kit lines get one box per character including spaces (they used to be split evenly), a tap on a space goes to the nearer word, and drags ignore edge blanks.
+- Wrapped sentences in space-delimited languages retain word boundaries in the text log and shared-text mining.
+- Auto OCR reloads language/engine changes during an active session and reports recognition failures.
+- Custom word-audio URLs remain available for non-Japanese study; Japanese providers receive only Japanese study lookups.
+- Unknown-word taps in text views and recursive definition lookups use language-aware whole-word selection.
+- AI configuration opens correctly when the app is already running; streaming fallback respects the streaming toggle and hides echoed authorization headers.
+- ML Kit overlay coordinates now map back from upscaled recognition images; RTL fragments join in reading order.
+- Dictionary expression probes cover either side of a tap; Anki sentence highlights retain the original inflected surface.
+- PaddleOCR uses the selected text profile independently of its model and verifies model bytes before session loading.
+- Non-Japanese OCR results can appear in the tappable screen layer; lookup and mining use the selected study language.
+- Corrected the ML Kit catalog support-category regression test.
+
 ## [0.5.1] — 2026-10-31
 
 ### Changed

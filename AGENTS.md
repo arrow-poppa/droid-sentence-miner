@@ -38,13 +38,24 @@ and wait/retry rather than falling back to an emulator.
 
 ## Git
 
-Commit as Wilson Neto <wilsonpsn@hotmail.com>. The SSH key needs a passphrase, so push over HTTPS
-with the GitHub CLI token:
+Commit as Wilson Neto <wilsonpsn@hotmail.com>. This implementation is on the user's fork
+`https://github.com/arrow-poppa/droid-sentence-miner`, branch
+`feature/multilingual-ocr-parser-byok`. Do not push to the official `WilsonNet` repository or
+open a PR there unless the user explicitly requests it. A draft PR within the fork is not an
+upstream submission. Push the implementation branch over HTTPS with the GitHub CLI token:
 
 ```bash
 git -c credential.helper= -c credential.helper='!gh auth git-credential' \
-  push https://github.com/WilsonNet/droid-sentence-miner.git main
+  push origin HEAD:feature/multilingual-ocr-parser-byok
 ```
+
+## Resource policy for this workspace
+
+Builds, compilation and Gradle tests run **only on GitHub Actions** (`.github/workflows/ci.yml`).
+The development PC has 9.5 GB RAM: never run Gradle, Kotlin compilation, or emulator builds here.
+Push the implementation branch to `origin` (the `arrow-poppa` fork), inspect `gh run view`, and
+retrieve the CI APK for physical-device validation. Do not push this feature to upstream `main`.
+Current implementation contracts and verification status: [docs/integration-state.md](docs/integration-state.md).
 
 ## Toolchain
 
@@ -79,8 +90,9 @@ AnkiDroid API v2.24.1 (JitPack). APK ships arm64-v8a, armeabi-v7a and x86_64 onl
 ## Common commands
 
 ```bash
-# Build + unit tests
-$GRADLE testDebugUnitTest assembleDebug --console=plain
+# Build + unit tests: GitHub Actions only; do not execute Gradle locally.
+gh workflow run ci.yml --ref feature/multilingual-ocr-parser-byok -R arrow-poppa/droid-sentence-miner
+gh run list -R arrow-poppa/droid-sentence-miner --workflow ci.yml --limit 5
 
 # NEVER launch an Android emulator! It kills the host machine. Always test on the physical device
 # (Xiaomi Pad 7 `c2bd6564` or Galaxy phone). If the tablet is locked (`mInputRestricted=true` in
@@ -146,6 +158,39 @@ Regions are screen fractions.
 See `.opencode/skills/dsm-debug-api/SKILL.md` for the full reference and recipes.
 
 ## Gotchas learned the hard way
+
+- **Bubble tap modes** (`BubbleMode`, `OverlayService.onBubbleTap`): Settings and the long-press
+  menu use the same `bubble_mode` preference and `fromPreference` fallback to QUICK. AUTO_OCR
+  reuses `toggleAutoOcr`/`startAutoOcr`; after consent, call `startAutoOcr` so missing areas open
+  the editor too. Start/stop toasts follow actual controller state in this mode.
+- **Multilingual coordinates and surfaces**: `OcrGeometry` maps ML Kit's upscaled line/symbol boxes
+  to the input crop. `AppContainer` passes the study language to scan/tap/lookup; parser candidates
+  never replace source spans. Keep `ScreenTextLine.confidence` null when unreported. See
+  `docs/multilingual.md` and `docs/integration-state.md` for current validation limits.
+- **English hyphenated lookup** (`WordSpans`, `Parsers.englishHyphenVariants`, `MultilingualEngine`):
+  probes retain original hyphens; candidates and results rank hyphenated → spaced → joined
+  spellings via `normalizationOrder`. Keep that rank before headword shape/priority/score, and
+  require the matched span to cover the tap (including a tap on an internal hyphen).
+- **ML Kit char boxes vs. spaces** (`OcrGeometry.alignChars`, `MlKitOcr.alignedChars`): ML Kit
+  reports symbols only for word characters, so flattening them gives fewer boxes than a spaced
+  line's text and `PageLayout.glyphsOf` fell back to an even split — taps on proportional Latin
+  text landed on the neighbouring word. Non-Japanese profiles now get one box per UTF-16 unit
+  (gaps shared by the characters between words); Japanese keeps the flat symbol list (book mode
+  and `PageLayout.clean` rely on it). Taps never hit a blank glyph (`ScreenText.glyphAt`, layer view).
+- **AI explanation = Yomitan's top box, Custom provider only** (`rememberLookupAi`/`LookupAi`,
+  `AI_SCRIPT` in `DefinitionComponents.kt`, `AiSettingsScreen`): drawn *inside* the definition
+  WebView as its first block (`dsmSetAi(payload, dark)`, buttons → `dsm.ai(action)`), so it scrolls
+  with the entries — a separate height-capped Compose box above the WebView cut long answers in
+  half. The script is always on popup pages (`aiBox = true`): AI settings load after the first
+  frame. `AiExplanationSection` draws it natively only for the no-entry fallback. Cards: fields
+  `AiExplanation` / `PopupSelection` (`CardExtras` through `MineCallback` → `CardMiner`); the
+  box's **Anki** button (`aiAnkiAction`) overwrites that field on the existing note via
+  `AnkiBridge.updateField` (field from `AnkiFieldMapper.modelFieldFor`, same as adding) or mines
+  the card when the word has no note. Settings expose
+  only `AiProviderType.CUSTOM`; `AiSettingsStore.migrateToCustom` moves older provider settings.
+  `cancelPendingRequests` off keeps abandoned calls running into the cache (`Inflight.keepAlive`);
+  the popup's Cancel always cancels (`AiExplanationService.cancel`).
+
 
 - **Auto OCR / text log / replay buffer** (GSM model): `AutoOcrController` polls new frames,
   OCRs the saved region, and `TextLineTracker` turns stable reads into lines (start = first
@@ -369,6 +414,10 @@ See `.opencode/skills/dsm-debug-api/SKILL.md` for the full reference and recipes
   A tap on a line maps the finger to a character (`TextLayoutResult` + `positionOnScreen`, `CharTap`)
   and opens the ScreenDictionary popup there (`lookupInLiveLine`); only a long press opens the old
   bottom panel (`showLatestLine`) — tap used to, and it pauses auto OCR, so the screen layer vanished.
+  With *Hide DSM windows from OCR* (`DsmPrefs.hideOverlaysFromCapture`, default on) it and the bubble
+  are `FLAG_SECURE` (`OverlayService.secureFromCapture`): black in MediaProjection frames and
+  screenshots, so a full-screen area doesn't OCR the feed back into the log — and black in
+  `screencap`/promo captures too (turn it off for those).
   Every hide logs its reason under `DSM-Live` (`hideLiveWindow(reason)`), as do config changes; a
   window detached by the system (not by us) is re-added. Live window vanishing → `adb logcat -s DSM-Live`.
 - **Screen dictionary** (`overlay/ScreenDictionary.kt`, `capture/ScreenText.kt`): auto OCR's fast
@@ -395,8 +444,11 @@ See `.opencode/skills/dsm-debug-api/SKILL.md` for the full reference and recipes
   column ≤840 dp (`ReadableWidth`); cards are `fillMaxWidth` so they don't shrink to their content.
 - **Tap verify** (`ScreenDictionary.lookupFrom`): the popup opens at once from the layer (up to one
   auto OCR interval old), then 250 ms later `AutoOcrController.readNow()` reads the paused frame;
-  if the word under the finger changed (rolling captions) the popup moves to it, if the read sees
-  other text but nothing there it closes, an empty read changes nothing.
+  if the word under the finger changed (rolling captions) the popup moves to it; nothing there or
+  an empty read changes nothing. Lines under the popup are dropped from that read
+  (`popupArea`): with a full-screen area the frame contains the popup, its definition became
+  "screen lines" whose layer windows (added later, so above the popup) ate taps on it → ACTION_OUTSIDE
+  → closed. Closing when the word was gone also fired on player controls shown by the pause.
 - **Clip end while paused**: an open line has no `endMs`, so its clip used to run to "now" (30 s
   max) when mined from a lookup popup with the video paused. `TextLog.openLinePausedAtMs` (set when
   auto OCR pauses) ends it there. `SubtitleLineFilter.dropUnsure` drops engine lines <0.5 confidence
@@ -540,7 +592,8 @@ See `.opencode/skills/dsm-debug-api/SKILL.md` for the full reference and recipes
 
 ```
 app/src/main/java/io/github/wilsonnet/droidsentenceminer/
-├── dict/      Yomitan import, Room storage, deinflector, lookup, glossary rendering
+├── ai/        BYOK Custom (OpenAI-compatible) provider, encrypted credentials, streaming and bounded explanation cache
+├── dict/      Yomitan import, Room storage, language parsers, lookup, glossary rendering
 ├── ocr/       meikiocr (ONNX) + ML Kit engines, preprocessing, GSM-style post-processing
 ├── capture/   MediaProjection capture, auto OCR loop, text areas
 ├── textlog/   Text log DB, line tracker/consensus, clip windows

@@ -2,8 +2,9 @@ package io.github.wilsonnet.droidsentenceminer.capture
 
 import io.github.wilsonnet.droidsentenceminer.book.PageLayout
 import io.github.wilsonnet.droidsentenceminer.ocr.BoundingBox
-import io.github.wilsonnet.droidsentenceminer.ocr.JapaneseTextScore
+import io.github.wilsonnet.droidsentenceminer.ocr.OcrPostProcessor
 import io.github.wilsonnet.droidsentenceminer.ocr.OcrLine
+import io.github.wilsonnet.droidsentenceminer.ocr.TextProfile
 
 /** A box as fractions of the screen. */
 data class FracRect(val left: Float, val top: Float, val right: Float, val bottom: Float) {
@@ -11,6 +12,8 @@ data class FracRect(val left: Float, val top: Float, val right: Float, val botto
     val centerY: Float get() = (top + bottom) / 2f
 
     fun union(o: FracRect) = FracRect(minOf(left, o.left), minOf(top, o.top), maxOf(right, o.right), maxOf(bottom, o.bottom))
+
+    fun overlaps(o: FracRect) = left < o.right && o.left < right && top < o.bottom && o.top < bottom
 }
 
 /** One line of on-screen text with where each of its characters is drawn. */
@@ -19,8 +22,8 @@ data class ScreenTextLine(
     val glyphs: List<FracRect>,
     /** Index of the auto OCR text area it was read from. */
     val area: Int,
-    /** The engine's mean character confidence (1 when it reports none). */
-    val confidence: Float = 1f,
+    /** The engine's reported confidence, or null when unavailable. */
+    val confidence: Float? = null,
 ) {
     val bounds: FracRect get() = glyphs.reduce(FracRect::union)
 }
@@ -34,6 +37,8 @@ object ScreenText {
     /**
      * [raw] are the engine's lines for a crop of [area] ([cropWidth]×[cropHeight] px); [kept] are
      * the rows the subtitle filter kept (crop px), so background signage gets no layer either.
+     * Lines with no letter of the study language ([profile]) get no layer: with the default
+     * Japanese profile that is the original "no Japanese character" rule.
      */
     fun fromRead(
         raw: List<OcrLine>,
@@ -42,6 +47,7 @@ object ScreenText {
         cropHeight: Int,
         area: TextArea,
         areaIndex: Int,
+        profile: TextProfile = TextProfile.JAPANESE,
     ): List<ScreenTextLine> {
         if (cropWidth <= 0 || cropHeight <= 0) return emptyList()
         fun frac(b: BoundingBox) = FracRect(
@@ -53,7 +59,7 @@ object ScreenText {
         // The detector sometimes returns a second, garbled box over the same line: keep the surer one.
         val distinct = raw.filterNot { line ->
             raw.any { other ->
-                other !== line && (other.confidence ?: 1f) > (line.confidence ?: 1f) && overlap(line.box, other.box) > 0.5f
+                other !== line && other.confidence != null && line.confidence != null && other.confidence > line.confidence && overlap(line.box, other.box) > 0.5f
             }
         }
         return distinct.mapNotNull { line ->
@@ -61,10 +67,21 @@ object ScreenText {
                 line.box.centerX >= k.left && line.box.centerX <= k.right && line.box.centerY >= k.top && line.box.centerY <= k.bottom
             }
             if (!inKept) return@mapNotNull null
-            val text = PageLayout.clean(line.text)
-            if (text.none { JapaneseTextScore.isJapanese(it) }) return@mapNotNull null
-            val vertical = line.box.height > line.box.width * 1.3f && text.length >= 2
-            ScreenTextLine(text, PageLayout.glyphsOf(line, text, vertical).map(::frac), areaIndex, line.confidence ?: 1f)
+            val text = if (profile.isJapanese) PageLayout.clean(line.text) else line.text.trim()
+            if (text.isEmpty() || profile.count(text) == 0) return@mapNotNull null
+            val vertical = profile.allowsVertical && line.box.height > line.box.width * 1.3f && text.length >= 2
+            // Per-character boxes of the raw text lose their alignment when trim() drops leading blanks.
+            val rawChars = line.chars
+            val source = if (!profile.isJapanese && rawChars != null && rawChars.size == line.text.length && text.length != line.text.length) {
+                val lead = line.text.length - line.text.trimStart().length
+                line.copy(chars = rawChars.subList(lead, lead + text.length))
+            } else {
+                line
+            }
+            var glyphs = PageLayout.glyphsOf(source, text, vertical)
+            // Evenly split boxes run left to right; an RTL line's first (logical) character is drawn rightmost.
+            if (profile.rightToLeft && line.chars?.size != text.length) glyphs = glyphs.reversed()
+            ScreenTextLine(text, glyphs.map(::frac), areaIndex, line.confidence)
         }.sortedWith(compareBy({ it.area }, { it.bounds.top }, { it.bounds.left }))
     }
 
@@ -77,12 +94,16 @@ object ScreenText {
         return (w.toLong() * h).toFloat() / smaller
     }
 
-    /** The character at screen fraction ([x], [y]) as (line, index), within [slack] (fraction of width). */
+    /**
+     * The character at screen fraction ([x], [y]) as (line, index), within [slack] (fraction of width).
+     * Blanks are never hit: a tap between two words goes to the nearer word, not to the space.
+     */
     fun glyphAt(lines: List<ScreenTextLine>, x: Float, y: Float, slackX: Float = 0f, slackY: Float = 0f): Pair<Int, Int>? {
         var best: Pair<Int, Int>? = null
         var bestDistance = Float.MAX_VALUE
         lines.forEachIndexed { l, line ->
             line.glyphs.forEachIndexed { i, g ->
+                if (line.text.getOrNull(i)?.isWhitespace() == true) return@forEachIndexed
                 if (x < g.left - slackX || x > g.right + slackX || y < g.top - slackY || y > g.bottom + slackY) return@forEachIndexed
                 val d = (g.centerX - x) * (g.centerX - x) + (g.centerY - y) * (g.centerY - y)
                 if (d < bestDistance) {

@@ -117,11 +117,19 @@ dependencies {
     ksp(libs.androidx.room.compiler)
 
     implementation(libs.mlkit.japanese)
+    // Latin + Japanese are bundled (offline, no Google Play needed); the other three scripts are
+    // delivered by Google Play services on first use (ModuleInstallClient), see docs/ocr.md.
+    implementation(libs.mlkit.latin)
+    implementation(libs.mlkit.gms.chinese)
+    implementation(libs.mlkit.gms.korean)
+    implementation(libs.mlkit.gms.devanagari)
+    implementation(libs.play.services.base)
     implementation(libs.onnxruntime.android)
     implementation(libs.ankidroid.api)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.okhttp.mockwebserver)
     androidTestImplementation(libs.androidx.test.ext.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 }

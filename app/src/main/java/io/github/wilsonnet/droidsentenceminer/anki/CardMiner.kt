@@ -45,9 +45,10 @@ class CardMiner(
         audio: M4aEncoder.EncodedAudio? = null,
         /** Word audio already being fetched (see [mineLine]); null: fetched here, alongside the glossary. */
         wordAudioFetch: Deferred<WordAudio.Clip?>? = null,
+        extras: CardExtras = CardExtras.NONE,
     ): AnkiCard = withContext(Dispatchers.Default) {
         val snapshot = prefs.snapshot()
-        val resolved = details ?: lookup.lookup(word)
+        val resolved = details ?: lookup.lookup(word, language = prefs.studyLanguage.first())
         val wordAudioJob = wordAudioFetch ?: async { fetchWordAudio(word, resolved) }
         val dicts = db.dictionaryDao().getEnabled().associateBy { it.id }
 
@@ -130,7 +131,7 @@ class CardMiner(
             reading = reading,
             meaningHtml = CardHtml.meaning(sb.toString(), CardHtml.frequencyLine(resolved).takeUnless { mode == GlossaryMode.FIRST }, dictStyles),
             sentence = sentence,
-            sentenceHtml = CardHtml.highlightSentence(sentence, resolved.baseForm.ifBlank { word }),
+            sentenceHtml = CardHtml.highlightSentence(sentence, word.takeIf { it in sentence } ?: resolved.baseForm.ifBlank { word }),
             imageBytes = imageBytes,
             imageName = "dsm_${sanitizeForFilename(resolved.baseForm.ifBlank { word })}.jpg",
             audioBytes = audio?.bytes,
@@ -141,15 +142,19 @@ class CardMiner(
             sourceTitle = "Droid Sentence Miner (screen OCR)",
             tags = tags,
             glossaryMedia = glossaryMedia.values.toList(),
+            aiExplanationHtml = CardHtml.plainText(extras.aiExplanation),
+            popupSelectionHtml = CardHtml.plainText(extras.popupSelection),
         )
     }
 
     /** The word's pronunciation for the card (null when turned off or not found in time). */
     private suspend fun fetchWordAudio(word: String, details: TermLookup.LookupDetails): WordAudio.Clip? {
         if (!prefs.wordAudio.first()) return null
+        // Other study languages can use a custom source without contacting Japanese providers.
+        val japanese = io.github.wilsonnet.droidsentenceminer.dict.lang.LanguageParsers.normalizeCode(prefs.studyLanguage.first()) == "ja"
         val t0 = android.os.SystemClock.elapsedRealtime()
         val expression = details.baseForm.ifBlank { word }
-        return wordAudioFetcher.fetch(expression, details.reading.orEmpty(), prefs.wordAudioCustomUrl.first()).also {
+        return wordAudioFetcher.fetch(expression, details.reading.orEmpty(), prefs.wordAudioCustomUrl.first(), japaneseSources = japanese).also {
             android.util.Log.i(TAG, "「$expression」: word audio fetch ${android.os.SystemClock.elapsedRealtime() - t0} ms (${it?.source})")
         }
     }
@@ -160,6 +165,18 @@ class CardMiner(
         (ankiClient.isDuplicate(expression) as? AnkiResult.Success)?.value
     }
 
+    /**
+     * The AI box's "Anki" button on a word that already has a note: writes [text] as plain text
+     * (escaped, line breaks kept) into that note's AI explanation field. Success = the field name.
+     */
+    suspend fun saveAiExplanation(word: String, details: TermLookup.LookupDetails?, text: String): AnkiResult<String> =
+        withContext(Dispatchers.IO) {
+            val expression = details?.baseForm?.ifBlank { word } ?: word
+            ankiClient.updateField(expression, CardFields.AI_EXPLANATION, CardHtml.plainText(text)).also {
+                android.util.Log.i(TAG, "「$expression」: AI explanation → Anki: $it")
+            }
+        }
+
     suspend fun mine(
         word: String,
         sentence: String,
@@ -168,9 +185,10 @@ class CardMiner(
         addToAnki: Boolean = true,
         audio: M4aEncoder.EncodedAudio? = null,
         wordAudioFetch: Deferred<WordAudio.Clip?>? = null,
+        extras: CardExtras = CardExtras.NONE,
     ): AnkiResult<String> = withContext(Dispatchers.IO) {
         val t0 = android.os.SystemClock.elapsedRealtime()
-        val card = buildCard(word, sentence, image, details, audio, wordAudioFetch)
+        val card = buildCard(word, sentence, image, details, audio, wordAudioFetch, extras)
         val snapshot = prefs.snapshot()
         val t1 = android.os.SystemClock.elapsedRealtime()
 
@@ -211,11 +229,12 @@ class CardMiner(
         audio: AudioSegment? = null,
         includeAudio: Boolean = true,
         edits: CardEdits? = null,
+        extras: CardExtras = CardExtras.NONE,
     ): AnkiResult<String> = coroutineScope {
         val t0 = android.os.SystemClock.elapsedRealtime()
         // Word audio is network-bound and the clip encode CPU-bound: start the fetch first so the
         // two overlap (encoding a few seconds of audio took 1.6 s with Nightshade running).
-        val resolved = details ?: lookup.lookup(word)
+        val resolved = details ?: lookup.lookup(word, language = prefs.studyLanguage.first())
         val wordAudioFetch = async(Dispatchers.IO) { fetchWordAudio(word, resolved) }
         val segment = when {
             edits != null -> edits.audio
@@ -247,7 +266,7 @@ class CardMiner(
         val image = textLog.screenshot(line)
         val t2 = android.os.SystemClock.elapsedRealtime()
         android.util.Log.i(TAG, "line ${line.id}: clip+encode ${t1 - t0} ms (${segment?.durationMs ?: 0} ms audio), screenshot ${t2 - t1} ms")
-        val result = mine(word, edits?.sentence ?: line.text, image, resolved, audio = encoded, wordAudioFetch = wordAudioFetch)
+        val result = mine(word, edits?.sentence ?: line.text, image, resolved, audio = encoded, wordAudioFetch = wordAudioFetch, extras = extras)
         if (result is AnkiResult.Success) withContext(Dispatchers.IO) { textLog.dao.markMined(line.id) }
         result
     }

@@ -127,7 +127,7 @@ object DebugApi {
                 val dark = params["dark"]?.let { it == "1" || it == "true" } ?: false
                 val container = AppContainer.from(app)
                 val html = runBlocking {
-                    val details = container.lookup.lookup(word)
+                    val details = container.lookupWord(word)
                     container.miner.buildPopupHtml(word, details, dark)
                 }
                 respondBytes(socket, "text/html; charset=utf-8", html.toByteArray())
@@ -208,7 +208,7 @@ object DebugApi {
                 runBlocking {
                     val line = params["line"]?.toLongOrNull()?.let { container.textLog.get(it) }
                     val sentence = line?.text ?: params["sentence"].orEmpty()
-                    val card = container.miner.buildCard(word, sentence, details = container.lookup.lookup(word))
+                    val card = container.miner.buildCard(word, sentence, details = container.lookupWord(word))
                     val model = container.prefs.ankiModel.first()
                     val api = AddContentApi(app)
                     val modelId = api.modelList?.entries?.firstOrNull { it.value == model }?.key
@@ -408,7 +408,7 @@ object DebugApi {
         val layer = JSONArray()
         service?.debugScreenText?.forEach { line ->
             val b = line.bounds
-            layer.put(JSONObject().put("text", line.text).put("glyphs", line.glyphs.size).put("confidence", line.confidence.toDouble()).put("bounds", JSONArray(listOf(b.left, b.top, b.right, b.bottom))))
+            layer.put(JSONObject().put("text", line.text).put("glyphs", line.glyphs.size).put("confidence", line.confidence?.toDouble() ?: JSONObject.NULL).put("bounds", JSONArray(listOf(b.left, b.top, b.right, b.bottom))))
         }
         json.put("screenText", JSONObject().put("lines", layer).put("popupOpen", service?.debugScreenPopupOpen == true))
         val buffer = container.textLog.audioBuffer
@@ -571,7 +571,7 @@ object DebugApi {
         }
         val result = runBlocking { engine.recognize(bitmap) }
         val text = result.text.trim()
-        val matches = if (text.isBlank()) emptyList() else runBlocking { container.lookup.scan(text) }
+        val matches = if (text.isBlank()) emptyList() else runBlocking { container.scanText(text) }
         val lines = JSONArray()
         result.lines.forEach { line ->
             lines.put(
@@ -597,7 +597,7 @@ object DebugApi {
     private fun lookup(params: Map<String, String>): JSONObject {
         val word = params["word"] ?: return errorJson("missing 'word' parameter")
         val container = AppContainer.from(app)
-        val details = runBlocking { container.lookup.lookup(word) }
+        val details = runBlocking { container.lookupWord(word) }
         return JSONObject()
             .put("ok", true)
             .put("word", word)
@@ -629,10 +629,10 @@ object DebugApi {
             repeat(n + 1) {
                 if (fresh) container.lookup.invalidateCaches()
                 val t0 = System.nanoTime()
-                val range = container.lookup.wordAt(text, index)
+                val range = container.wordRange(text, index)
                 val t1 = System.nanoTime()
                 word = text.substring(range.first, minOf(range.last + 1, text.length))
-                val details = container.lookup.lookup(word)
+                val details = container.lookupWord(word)
                 val t2 = System.nanoTime()
                 val html = container.miner.buildPopupHtml(word, details, dark)
                 val t3 = System.nanoTime()
@@ -669,7 +669,7 @@ object DebugApi {
         val word = params["word"] ?: return errorJson("missing 'word' parameter")
         val sentence = params["sentence"] ?: return errorJson("missing 'sentence' parameter")
         val container = AppContainer.from(app)
-        val details = runBlocking { container.lookup.lookup(word) }
+        val details = runBlocking { container.lookupWord(word) }
         val result = runBlocking {
             container.miner.mine(word = word, sentence = sentence, details = details)
         }
@@ -923,7 +923,7 @@ object DebugApi {
         val word = params["word"] ?: return errorJson("missing 'word' parameter")
         val result = runBlocking {
             val line = container.textLog.get(id) ?: return@runBlocking null
-            container.miner.mineLine(line, word, container.lookup.lookup(word))
+            container.miner.mineLine(line, word, container.lookupWord(word))
         } ?: return errorJson("no line $id")
         return when (result) {
             is AnkiResult.Success -> JSONObject().put("ok", true)

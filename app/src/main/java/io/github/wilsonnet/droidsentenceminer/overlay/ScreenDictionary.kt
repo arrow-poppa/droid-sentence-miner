@@ -26,6 +26,7 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import io.github.wilsonnet.droidsentenceminer.AppContainer
+import io.github.wilsonnet.droidsentenceminer.capture.FracRect
 import io.github.wilsonnet.droidsentenceminer.capture.ScreenCaptureManager
 import io.github.wilsonnet.droidsentenceminer.capture.ScreenText
 import io.github.wilsonnet.droidsentenceminer.capture.ScreenTextLine
@@ -63,6 +64,7 @@ class ScreenDictionary(
     private var lines: List<ScreenTextLine> = emptyList()
 
     private var popup: ComposeView? = null
+    private var popupParams: WindowManager.LayoutParams? = null
     private var popupOwner: OverlayLifecycleOwner? = null
     private val handler = Handler(Looper.getMainLooper())
     private var pausedMedia = false
@@ -106,8 +108,8 @@ class ScreenDictionary(
         setLayer(newLines)
         scope.launch {
             val (line, range) = newLines.withIndex().firstNotNullOfOrNull { (i, l) ->
-                container.lookup.scan(l.text).firstOrNull()?.let { i to (it.start until it.end) }
-            } ?: (0 to container.lookup.wordAt(newLines[0].text, 0))
+                container.scanText(l.text).firstOrNull()?.let { i to (it.start until it.end) }
+            } ?: (0 to container.wordRange(newLines[0].text, 0))
             if (quickActive) show(line, range)
         }
     }
@@ -131,7 +133,7 @@ class ScreenDictionary(
             val existing = layers[index]
             val view = existing?.first ?: ScreenTextLayerView(context)
             val params = existing?.second ?: layerParams()
-            view.setLines(listOf(glyphs), listOf(index))
+            view.setLines(listOf(glyphs), listOf(index), listOf(line.text))
             view.onTap = { line, index -> lookupFrom(line, index) }
             view.onSelect = { line, range -> show(line, range) }
             params.x = left
@@ -171,23 +173,32 @@ class ScreenDictionary(
         val glyph = target.glyphs.getOrNull(index) ?: return
         val seq = ++tapSeq
         scope.launch {
-            val range = container.lookup.wordAt(target.text, index)
+            val range = container.wordRange(target.text, index)
             show(line, range)
             if (quickActive) return@launch // read from a fresh frame just now, and auto OCR's areas are elsewhere
             delay(VERIFY_DELAY_MS) // let the pause take effect so the frame is the one being looked at
-            // An empty read may just be a miss; only a read that sees other text overrides the tap.
-            val fresh = refresh()?.takeIf { it.isNotEmpty() } ?: return@launch
+            // The re-read frame has the popup in it: with an area over the whole screen its definition
+            // text came back as "screen lines", and their layer windows (added after the popup, so
+            // above it) caught taps meant for the popup and closed it. Lines under the popup are not
+            // screen text.
+            val covered = popupArea()
+            val fresh = refresh()
+                ?.filterNot { covered != null && it.bounds.overlaps(covered) }
+                // An empty read may just be a miss; only a read that sees other text overrides the tap.
+                ?.takeIf { it.isNotEmpty() } ?: return@launch
             if (seq != tapSeq || !popupOpen) return@launch
             val hit = ScreenText.glyphAt(fresh, glyph.centerX, glyph.centerY)
             if (hit == null) {
-                // The subtitle changed and there is no text under the finger any more.
-                dismiss()
-                setLayer(fresh)
+                // Nothing under the finger in the re-read. That used to close the popup ("the subtitle
+                // changed"), but the player's controls appearing on pause, the popup itself or a
+                // different read of the same frame lose the word just as well, and the popup seemed
+                // to close at random. Keep it: a stale definition is one tap away from going.
+                android.util.Log.i("DSM-ScreenDict", "tap verify: word not in the re-read, popup kept")
                 return@launch
             }
             val (freshLine, freshIndex) = hit
             val freshText = fresh[freshLine].text
-            val freshRange = container.lookup.wordAt(freshText, freshIndex)
+            val freshRange = container.wordRange(freshText, freshIndex)
             if (freshText.substring(freshRange) == target.text.substring(range.first, min(range.last, target.text.lastIndex) + 1)) return@launch
             if (seq != tapSeq || !popupOpen) return@launch
             setLayer(fresh)
@@ -197,19 +208,23 @@ class ScreenDictionary(
 
     private fun show(line: Int, range: IntRange) {
         val target = lines.getOrNull(line) ?: return
-        val last = min(range.last, target.text.lastIndex)
-        if (range.first > last) return
+        var first = range.first.coerceAtLeast(0)
+        var last = min(range.last, target.text.lastIndex)
+        // A drag over spaced text may start or end on a blank: the word is what is between.
+        while (first <= last && target.text[first].isWhitespace()) first++
+        while (last >= first && target.text[last].isWhitespace()) last--
+        if (first > last) return
         dismiss(resumeLater = true)
         handler.removeCallbacks(resume)
         if (pauseMedia) pauseMediaPlayback()
 
-        layers.values.forEach { (view, _) -> view.highlight(line, range.first..last) }
+        layers.values.forEach { (view, _) -> view.highlight(line, first..last) }
         val metrics = ScreenCaptureManager.screenMetrics(context)
         val w = metrics.widthPixels.toFloat()
         val h = metrics.heightPixels.toFloat()
-        val glyphs = (range.first..last).mapNotNull { target.glyphs.getOrNull(it) }.reduce { a, b -> a.union(b) }
+        val glyphs = (first..last).mapNotNull { target.glyphs.getOrNull(it) }.reduce { a, b -> a.union(b) }
         val anchor = Rect(glyphs.left * w, glyphs.top * h, glyphs.right * w, glyphs.bottom * h)
-        val word = target.text.substring(range.first, last + 1)
+        val word = target.text.substring(first, last + 1)
         val allText = lines.joinToString("\n") { it.text }
         // The log line has the sentence, its screenshot and its audio.
         openPopup(anchor, word, allText) { container.textLog.lineForSharedText(allText) }
@@ -222,7 +237,7 @@ class ScreenDictionary(
     fun lookupInLiveLine(tap: CharTap) {
         val seq = ++tapSeq
         scope.launch {
-            val range = container.lookup.wordAt(tap.text, tap.index)
+            val range = container.wordRange(tap.text, tap.index)
             val last = min(range.last, tap.text.lastIndex)
             if (range.first > last || seq != tapSeq) return@launch
             dismiss(resumeLater = true)
@@ -286,7 +301,7 @@ class ScreenDictionary(
                         sentence = sentence,
                         image = null,
                         onDismiss = { dismiss() },
-                        onMine = { details, edits -> container.miner.mineLine(line(), word, details, edits = edits) },
+                        onMine = { details, edits, extras -> container.miner.mineLine(line(), word, details, edits = edits, extras = extras) },
                         maxHeight = with(local) { plan.maxHeight.toDp() },
                         handleBack = false,
                         width = popupWidthDp,
@@ -317,9 +332,21 @@ class ScreenDictionary(
             }
         }
         popup = view
+        popupParams = params
         popupOwner = owner
         handler.removeCallbacks(clearQuick)
         runCatching { windowManager.addView(view, params) }
+    }
+
+    /** Where the popup is on screen, in screen fractions (null before it was laid out). */
+    private fun popupArea(): FracRect? {
+        val view = popup ?: return null
+        val params = popupParams ?: return null
+        if (view.width == 0 || view.height == 0) return null
+        val metrics = ScreenCaptureManager.screenMetrics(context)
+        val w = metrics.widthPixels.toFloat()
+        val h = metrics.heightPixels.toFloat()
+        return FracRect(params.x / w, params.y / h, (params.x + view.width) / w, (params.y + view.height) / h)
     }
 
     /**
@@ -329,6 +356,7 @@ class ScreenDictionary(
     fun dismiss(resumeLater: Boolean = false) {
         val view = popup ?: return
         popup = null
+        popupParams = null
         runCatching { windowManager.removeView(view) }
         popupOwner?.onDestroy()
         popupOwner = null
@@ -459,6 +487,7 @@ class ScreenDictionary(
 class ScreenTextLayerView(context: Context) : View(context) {
     private var glyphs: List<List<RectF>> = emptyList()
     private var lineIds: List<Int> = emptyList()
+    private var texts: List<String> = emptyList()
     private var marked: Pair<Int, IntRange>? = null
     private var selecting: Pair<Int, IntRange>? = null
 
@@ -474,9 +503,11 @@ class ScreenTextLayerView(context: Context) : View(context) {
     private var moved = false
     private var anchor: Pair<Int, Int>? = null
 
-    fun setLines(glyphs: List<List<RectF>>, lineIds: List<Int>) {
+    /** [texts]: each line's text, indexed like its glyphs; blanks in it are never hit. */
+    fun setLines(glyphs: List<List<RectF>>, lineIds: List<Int>, texts: List<String> = emptyList()) {
         this.glyphs = glyphs
         this.lineIds = lineIds
+        this.texts = texts
         invalidate()
     }
 
@@ -499,6 +530,8 @@ class ScreenTextLayerView(context: Context) : View(context) {
         var bestD = Float.MAX_VALUE
         glyphs.forEachIndexed { l, line ->
             line.forEachIndexed { i, g ->
+                // A tap between two words goes to the nearer word: a space alone looks nothing up.
+                if (texts.getOrNull(l)?.getOrNull(i)?.isWhitespace() == true) return@forEachIndexed
                 if (x < g.left - slack || x > g.right + slack || y < g.top - slack || y > g.bottom + slack) return@forEachIndexed
                 val d = (g.centerX() - x) * (g.centerX() - x) + (g.centerY() - y) * (g.centerY() - y)
                 if (d < bestD) {

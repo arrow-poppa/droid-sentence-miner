@@ -17,6 +17,7 @@ package io.github.wilsonnet.droidsentenceminer.textlog
 class TextLineTracker(
     private val stableReads: Int = 2,
     private val sameLineSimilarity: Double = 0.6,
+    private val spaceDelimited: Boolean = false,
 ) {
     sealed interface Event {
         data class Started(val text: String, val atMs: Long) : Event
@@ -60,12 +61,12 @@ class TextLineTracker(
 
     /** Adds an extra reading of the current line (e.g. a slower, more accurate OCR pass). */
     fun addReading(text: String) {
-        val cleaned = TextSimilarity.clean(text)
+        val cleaned = TextSimilarity.clean(text, spaceDelimited)
         if (current != null && cleaned.isNotEmpty()) lineReads += cleaned
     }
 
     fun onRead(rawText: String, atMs: Long): List<Event> {
-        val text = TextSimilarity.clean(rawText)
+        val text = TextSimilarity.clean(rawText, spaceDelimited)
         val stable = current
         val differs = if (stable == null) text.isNotEmpty() else !sameLine(text)
         if (!differs) changedAt = null else if (changedAt == null) changedAt = atMs
@@ -171,12 +172,12 @@ object TextSimilarity {
     private val boxEdges = Regex("^[|｜│¦\\[\\]]+|[|｜│¦\\[\\]]+$")
 
     /** Normalizes OCR output for comparison and storage (joins lines, drops caption-box edges). */
-    fun clean(text: String): String {
+    fun clean(text: String, spaceDelimited: Boolean = false): String {
         val rows = text.lines().map { it.trim().replace(boxEdges, "").trim() }.filter { it.isNotEmpty() }
         val out = StringBuilder()
         for (row in rows) {
             // Japanese wraps without spaces; keep one between Latin words split across rows.
-            if (out.isNotEmpty() && out.last().isLatinOrDigit() && row.first().isLatinOrDigit()) out.append(' ')
+            if (out.isNotEmpty() && (spaceDelimited || out.last().isLatinOrDigit() && row.first().isLatinOrDigit())) out.append(' ')
             out.append(row)
         }
         return out.toString()

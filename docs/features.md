@@ -2,6 +2,12 @@
 
 [← README](../README.md) · [Features](features.md) · [Usage](usage.md) · [Architecture](architecture.md) · [Building](building.md) · [Validation](validation.md) · [Roadmap](roadmap.md)
 
+## Multilingual implementation branch
+
+The implementation branch adds multilingual OCR, language-aware lookup and optional BYOK explanations.
+English hyphenated words stay whole when a dictionary matches their hyphenated, space-separated,
+or joined spelling; taps and scans keep the original text and offsets. See [multilingual support and limitations](multilingual.md).
+
 Everything the app does, in detail. The short version is in the [README](../README.md).
 
 - **Auto OCR mode** — draw boxes over the game's text areas once (dialogue box, name box,
@@ -33,6 +39,8 @@ Everything the app does, in detail. The short version is in the [README](../READ
   back (auto OCR pauses there, since it would cover the game). Size and position are remembered
   per orientation (a big portrait window would cover a landscape video), and so is the mode;
   fullscreen always reopens as the normal window.
+  It and the bubble are hidden from screen capture by default (`FLAG_SECURE`, *Hide DSM windows
+  from OCR*), so an auto OCR area over the whole screen never reads them.
 - **App focus** — share "A single app" (Android 14+) and pick the game: only it is read, and
   auto OCR pauses while you are in other apps or in Droid Sentence Miner itself.
 - **Book mode (paper books, manga)** — the *Book* tab takes a photo with Samsung Camera on Galaxy
@@ -74,8 +82,10 @@ Everything the app does, in detail. The short version is in the [README](../READ
   before mining; optional (experimental) silence trimming is in Settings.
 - **Floating popup overlay** — a draggable bubble that stays on screen. Tap it, drag a box over a
   word and its definition pops up right next to it (*Quick lookup*, the default); other words in
-  the box can be tapped too. Long-press opens the menu, where *Bubble tap* switches to *Scan
-  region* (the region editor with Scan / Full screen / Live and the results panel). The
+  the box can be tapped too. *Settings → OCR → Bubble tap* and the long-press menu offer *Quick
+  lookup*, *Scan region* (the region editor with Scan / Full screen / Live and the results panel),
+  or *Toggle auto OCR* (one tap starts/stops reading, with a toast; asks for capture consent and
+  text areas when needed). Both menus share the same saved choice. The
   notification stays available as a shortcut.
 - **Japanese OCR trained on games** — on-device [meikiocr](https://github.com/rtr46/meikiocr)
   (ONNX Runtime), a detector + recognizer trained on Japanese video-game text: 3–19× fewer
@@ -114,7 +124,15 @@ Everything the app does, in detail. The short version is in the [README](../READ
   Context Sentence (Sentence stays empty so it stays a word card), Word Audio, Audio, Picture.
   **Settings → Anki → Fields** shows what goes into each field of the chosen note type and lets you
   pick the content per field (Word, Reading, Glossary, Sentence, Screenshot, Sentence/Word audio,
-  Pitch graph, Source or nothing); the mapping is saved per note type, *Reset to automatic* drops it.
+  Pitch graph, Source, **AI explanation**, **Popup selection** or nothing); the mapping is saved per
+  note type, *Reset to automatic* drops it. *AI explanation* is the finished explanation shown in
+  the popup when you add the card (Chimahon's `{ai-explanation}`); *Popup selection* is the text you
+  last selected in the popup (Yomitan's `{popup-selection-text}`). Fields named like *AI Explanation*
+  or *SelectionText* (Lapis) are matched automatically; new DSM note types get both fields.
+  The AI box's **Anki** button sends the finished explanation as plain text (escaped, line breaks
+  kept): a word already in Anki gets the AI explanation field of its newest note overwritten (the
+  note the duplicate check finds: first field, configured note type); otherwise the card is added
+  as *+ Anki* would, with the explanation on it. A note type with no AI explanation field says so.
 - **Word audio like Yomitan** — the word's pronunciation is fetched from the same sources Yomitan
   uses for Japanese, in the same order: JapanesePod101 (placeholder clip rejected by hash),
   JapanesePod101 dictionary search, Jisho; plus an optional custom URL (`{term}`/`{reading}`,

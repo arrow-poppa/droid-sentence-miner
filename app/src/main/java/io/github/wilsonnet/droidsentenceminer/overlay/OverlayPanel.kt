@@ -10,6 +10,8 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -40,6 +42,9 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.lightColorScheme
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
+import kotlinx.coroutines.launch
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -157,21 +162,19 @@ private fun Header(state: OverlayPanelState, callbacks: OverlayCallbacks) {
 }
 
 @Composable
+@OptIn(ExperimentalLayoutApi::class)
 private fun MenuContent(state: OverlayPanelState, callbacks: OverlayCallbacks) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Spacer(Modifier.height(4.dp))
         Text("Bubble tap", style = MaterialTheme.typography.labelLarge)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            FilterChip(
-                selected = state.bubbleMode == BubbleMode.QUICK,
-                onClick = { callbacks.onBubbleMode(BubbleMode.QUICK) },
-                label = { Text("Quick lookup") },
-            )
-            FilterChip(
-                selected = state.bubbleMode == BubbleMode.REGION,
-                onClick = { callbacks.onBubbleMode(BubbleMode.REGION) },
-                label = { Text("Scan region") },
-            )
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            BubbleMode.entries.forEach { mode ->
+                FilterChip(
+                    selected = state.bubbleMode == mode,
+                    onClick = { callbacks.onBubbleMode(mode) },
+                    label = { Text(mode.label) },
+                )
+            }
         }
         if (state.autoOcrRunning && state.captureStopped) {
             Button(onClick = callbacks.onRestartCapture, modifier = Modifier.fillMaxWidth()) {
@@ -389,6 +392,11 @@ fun ClickableJapaneseText(
     scanned: List<ScannedWord>,
     onWordClick: (String) -> Unit,
 ) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val container = remember { io.github.wilsonnet.droidsentenceminer.AppContainer.from(context) }
+    val scope = rememberCoroutineScope()
+    val currentText by rememberUpdatedState(text)
+    val currentClick by rememberUpdatedState(onWordClick)
     // The text can change (auto OCR updates the line) before its scan does: drop stale offsets.
     val matches = remember(text, scanned) {
         scanned.filter { it.start >= 0 && it.end <= text.length && it.start < it.end && text.regionMatches(it.start, it.text, 0, it.text.length) }
@@ -427,32 +435,16 @@ fun ClickableJapaneseText(
         modifier = Modifier.pointerInput(text, matches) {
             detectTapGestures { position ->
                 val offset = layout?.getOffsetForPosition(position) ?: return@detectTapGestures
-                val match = matches.firstOrNull { offset >= it.start && offset < it.end }
-                if (match != null) {
-                    onWordClick(match.text)
-                } else if (offset in text.indices) {
-                    val char = text[offset]
-                    if (char.isLetter()) {
-                        onWordClick(
-                            run {
-                                // Expand to the run of Japanese characters around the tap.
-                                var start = offset
-                                var end = offset + 1
-                                while (start > 0 && text[start - 1].isJapaneseLetter()) start--
-                                while (end < text.length && text[end].isJapaneseLetter()) end++
-                                text.substring(start, end)
-                            },
-                        )
+                if (offset in text.indices) {
+                    scope.launch {
+                        val range = container.wordRange(text, offset)
+                        if (currentText == text) {
+                            val surface = text.substring(range)
+                            if (surface.any { it.isLetterOrDigit() }) currentClick(surface)
+                        }
                     }
                 }
             }
         },
     )
-}
-
-private fun Char.isJapaneseLetter(): Boolean {
-    val code = code
-    return (code in 0x3040..0x30FF) || (code in 0x4E00..0x9FFF) ||
-        (code in 0x3400..0x4DBF) || (code in 0xF900..0xFAFF) ||
-        this == '々' || this == '〆' || this == 'ー'
 }

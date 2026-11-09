@@ -3,7 +3,7 @@ title: Settings
 description: Every Droid Sentence Miner preference, grouped by what it changes.
 ---
 
-Settings are one scrollable page with two sub-pages: **Dictionaries** and **Anki**. The back
+Settings are one scrollable page with sub-pages for **Dictionaries**, **Anki** and **AI explanations**. The back
 button or gesture returns to the list.
 
 ## Dictionaries and Anki
@@ -15,20 +15,54 @@ button or gesture returns to the list.
   the screenshot, the picture's maximum height (default 462 px, 0 = original), a **Test
   connection** button, and a per-note-type **Fields** editor that overrides name matching.
 
-## OCR
+## Language and OCR (multilingual development branch)
 
-- **Engine** — meikiocr (recommended after the model download) or Google ML Kit. The explanation
-  under each option says whether the model is installed.
-- **Download meikiocr models (31 MB)** — shown when meikiocr is selected but not installed. Until
-  the download finishes, ML Kit is used.
-- **Two-pass OCR (ML Kit)** — re-read detected lines at higher resolution and keep the better
-  result. More accurate, a little slower.
-- **Filter non-Japanese lines** — drop UI noise such as menus or numbers when Japanese is present.
+- **Study language** selects dictionary boundaries, preprocessing and deinflection independently of the OCR engine.
+- **Engine** — Auto, meikiocr (Japanese game text), ML Kit or PaddleOCR ONNX.
+- **ML Kit script** — Latin, Chinese, Japanese, Korean or Devanagari. Latin/Japanese are bundled;
+  the other three require Google Play services and an initial model download. Catalog entries
+  share script models and keep Google's supported/experimental/mapped categories.
+- **PaddleOCR** — as in Chimahon, every recognizer is its own engine option (Latin Tiny,
+  Multilingual, Cyrillic, Arabic, Greek, Korean, or the study language's), and **PaddleOCR
+  detector** (Tiny or Small) is always shown and shared by all of them. Picking one downloads the
+  detector and recognizer it needs. **PaddleOCR models** lists every model with its status, size
+  and Download/Delete. Models are checked with SHA-256 and run locally after installation.
+- **Download meikiocr models (31 MB)** — until installed, the Japanese path uses ML Kit.
+- **Two-pass OCR (ML Kit)** — optionally re-read detected lines at higher resolution.
+- **Filter non-study-language lines** — remove background UI noise using the chosen text profile.
+- **Bubble tap** — *Quick lookup* (default), *Scan region*, or *Toggle auto OCR*. The last option
+  starts/stops reading with one tap and a confirmation toast; capture consent and the text-area
+  editor open when needed. This is the same saved choice as in the bubble's long-press menu.
 - **Live text window** — show the floating feed of new lines while auto OCR runs.
+- **Hide DSM windows from OCR** (on by default) — the live text window and the bubble are
+  `FLAG_SECURE`, so screen capture sees them black and a full-screen auto OCR area doesn't read
+  them. Your own screenshots/recordings show them black too.
 - **Tap text on screen to look it up** — the invisible screen dictionary layer.
 - **Pause the video while looking up** — media-key pause/resume around a lookup.
 - **Auto OCR interval** — 200–2000 ms (default 400 ms). Lower catches short lines sooner; higher
   saves battery.
+
+## AI explanations (multilingual development branch)
+
+AI is off by default. Bring your own key through one **Custom (OpenAI-compatible)** provider:
+endpoint (any chat-completions URL: OpenAI, OpenRouter, DeepSeek, Gemini's OpenAI endpoint, a
+local server), API key, model ID, OpenRouter provider routing/slugs/fallbacks, thinking mode and
+effort, and a custom request-body JSON. Then the prompts, temperature and behaviour: *Generate on
+lookup*, *Real time response*, *Cancel unfinished requests* and *Use AI when no dictionary entry
+exists*. *Test connection* checks the saved setup. Keys are encrypted using Android Keystore and
+excluded from backups.
+
+Once enabled, the explanation appears at the **top of the lookup popup, above the dictionary
+entries**, as in Yomitan: the selected original word and its sentence go to your endpoint. **↻**
+regenerates, **Cancel** stops the request, and closing/changing the lookup cancels it (unless
+*Cancel unfinished requests* is off). Dictionary results remain available without AI. Map a
+note-type field to **AI explanation** in Cards → Fields to put the explanation on the card;
+**Popup selection** adds the text you selected in the popup. The **Anki** button in the AI box
+sends the explanation as plain text to the word's card: it fills that field on the existing note,
+or adds the card if the word isn't in Anki yet.
+
+These additions still need physical-device validation; build/test evidence is recorded in the
+repository's `docs/integration-state.md` and `docs/multilingual.md`.
 
 ## Cards
 
@@ -53,7 +87,7 @@ button or gesture returns to the list.
   speaker, so mic clips are less tinny. Includes a **Measure** action.
 - **Compressor** — evens out loud peaks before normalization.
 - **Normalize volume** — bring every clip to the same loudness.
-- **Word audio** — fetch pronunciation from JapanesePod101/Jisho.
+- **Word audio** — fetch pronunciation from JapanesePod101/Jisho for Japanese study; other languages use only the custom audio URL.
 - **Custom audio URL (optional)** — tried first; `{term}` and `{reading}` are replaced.
 - **Replay buffer** — 1–10 minutes (5 by default, about 2.9 MB of memory per minute).
 - **Start offset / End offset** — 0–3000 ms of audio kept around the line.

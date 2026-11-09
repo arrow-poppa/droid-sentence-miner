@@ -277,7 +277,7 @@ fun TextsScreen(modifier: Modifier = Modifier) {
             sentence = line.text,
             image = null,
             onDismiss = { lookup = null },
-            onMine = { details, edits -> container.miner.mineLine(line, word, details, audio = editedAudio[line.id], edits = edits) },
+            onMine = { details, edits, extras -> container.miner.mineLine(line, word, details, audio = editedAudio[line.id], edits = edits, extras = extras) },
             loadAudio = { editedAudio[line.id] ?: container.miner.lineAudio(line) },
         )
     }
@@ -367,7 +367,8 @@ private fun LineCard(
                 Text(line.text, style = MaterialTheme.typography.bodyLarge)
             } else {
                 var matches by remember(line.text) { mutableStateOf<List<ScannedWord>>(emptyList()) }
-                LaunchedEffect(line.text) { matches = container.lookup.scan(line.text) }
+                val language by container.prefs.studyLanguage.collectAsState(initial = "ja")
+                LaunchedEffect(line.text, language) { matches = container.scanText(line.text) }
                 ClickableJapaneseText(text = line.text, scanned = matches, onWordClick = onWord)
 
                 var screenshot by remember(line.screenshotPath) { mutableStateOf<Bitmap?>(null) }

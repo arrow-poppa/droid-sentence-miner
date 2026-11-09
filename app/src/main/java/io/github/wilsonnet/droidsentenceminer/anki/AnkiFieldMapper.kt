@@ -25,6 +25,9 @@ object AnkiFieldMapper {
         CardFields.SOURCE to listOf("source", "origin", "title", "url"),
         CardFields.PITCH_GRAPH to listOf("pitchgraph", "graph", "pitchaccentgraph", "pitchaccentgraphs", "pitchaccent", "pitch", "pitchaccents"),
         CardFields.WORD_AUDIO to listOf("wordaudio", "expressionaudio", "vocabaudio", "vocabularyaudio", "termaudio", "audioword"),
+        // Chimahon's AUTO_DETECT_ALIASES for {ai-explanation} and {popup-selection-text}.
+        CardFields.AI_EXPLANATION to listOf("aiexplanation", "aiexpl", "ai"),
+        CardFields.POPUP_SELECTION to listOf("popupselection", "popupselectiontext", "selectiontext", "selection", "selectedtext", "plainselectedtext"),
     )
 
     /** Fields that unambiguously hold the sentence clip (preferred over a plain "Audio"). */
@@ -53,6 +56,17 @@ object AnkiFieldMapper {
         }
         return result
     }
+
+    /**
+     * The note type field that receives [canonical] when a card is added: the Fields editor's pick
+     * ([custom]) or the name match. Null when nothing receives it (also the Front/Back layout).
+     */
+    fun modelFieldFor(canonical: String, fieldNames: List<String>, custom: Map<String, String>? = null): String? =
+        if (custom != null) {
+            fieldNames.firstOrNull { custom[it] == canonical }
+        } else {
+            canonicalToModelField(fieldNames)[canonical]
+        }
 
     /** The automatic choice as model field -> canonical field ("" = left empty), for the Fields editor. */
     fun automaticAssignment(fieldNames: List<String>): Map<String, String> {

@@ -41,8 +41,6 @@ import io.github.wilsonnet.droidsentenceminer.capture.ScreenText
 import io.github.wilsonnet.droidsentenceminer.capture.ScreenshotAccessibilityService
 import io.github.wilsonnet.droidsentenceminer.ocr.SubtitleLineFilter
 import io.github.wilsonnet.droidsentenceminer.capture.ScreenCaptureManager
-import io.github.wilsonnet.droidsentenceminer.ocr.JapaneseTextScore
-import io.github.wilsonnet.droidsentenceminer.ocr.MlKitJapaneseOcr
 import io.github.wilsonnet.droidsentenceminer.textlog.TextLineEntity
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -86,6 +84,9 @@ class OverlayService : Service() {
     private var liveView: ComposeView? = null
     private var liveOwner: OverlayLifecycleOwner? = null
     private var liveParams: WindowManager.LayoutParams? = null
+
+    /** [DsmPrefs.hideOverlaysFromCapture]: our floating windows are FLAG_SECURE (black to capture). */
+    private var hideFromCapture = true
     private var liveDismissed = false
     private val handler = android.os.Handler(android.os.Looper.getMainLooper())
     private val liveMode = androidx.compose.runtime.mutableStateOf(LiveMode.NORMAL)
@@ -126,6 +127,17 @@ class OverlayService : Service() {
         }
 
         screenDictionary = ScreenDictionary(this, windowManager, scope, container)
+        scope.launch {
+            container.prefs.hideOverlaysFromCapture.collect { hide ->
+                hideFromCapture = hide
+                listOf(liveView to liveParams, bubbleView to bubbleParams).forEach { (view, params) ->
+                    if (view != null && params != null && view.isAttachedToWindow) {
+                        secureFromCapture(params)
+                        runCatching { windowManager.updateViewLayout(view, params) }
+                    }
+                }
+            }
+        }
         autoOcr = AutoOcrController(
             scope,
             captureManager,
@@ -149,7 +161,7 @@ class OverlayService : Service() {
         scope.launch { container.prefs.pauseOnLookup.collect { screenDictionary.pauseMedia = it } }
         scope.launch {
             container.prefs.bubbleMode.collect { name ->
-                panelState.bubbleMode = BubbleMode.entries.firstOrNull { it.name.equals(name, true) } ?: BubbleMode.QUICK
+                panelState.bubbleMode = BubbleMode.fromPreference(name)
             }
         }
         screenDictionary.refresh = { autoOcr.readNow() }
@@ -178,6 +190,13 @@ class OverlayService : Service() {
                 autoOcrState.value = it
                 if (changed && running.value) startForegroundCompat(includeProjection = captureManager.isReady)
                 if (changed) {
+                    if (panelState.bubbleMode == BubbleMode.AUTO_OCR) {
+                        android.widget.Toast.makeText(
+                            this@OverlayService,
+                            if (it.running) "Auto OCR started" else "Auto OCR stopped",
+                            android.widget.Toast.LENGTH_SHORT,
+                        ).show()
+                    }
                     if (it.running) {
                         liveDismissed = false
                         if (container.prefs.liveTextWindow.first()) showLiveWindow()
@@ -329,6 +348,7 @@ class OverlayService : Service() {
             )
             bubbleView = view
             bubbleParams = params
+            secureFromCapture(params)
             runCatching { windowManager.addView(view, params) }
             bubbleHidden = false
         }
@@ -380,6 +400,7 @@ class OverlayService : Service() {
         when (panelState.bubbleMode) {
             BubbleMode.QUICK -> startQuickLookup()
             BubbleMode.REGION -> showCaptureOverlay()
+            BubbleMode.AUTO_OCR -> toggleAutoOcr()
         }
     }
 
@@ -466,18 +487,22 @@ class OverlayService : Service() {
         val padX = QUICK_PAD_DP * resources.displayMetrics.density / frame.width
         val padY = QUICK_PAD_DP * resources.displayMetrics.density / frame.height
         val area = TextArea(box.left - padX, box.top - padY, box.right + padX, box.bottom + padY).clamped()
+        var unavailable: String? = null
         val lines = withContext(Dispatchers.Default) {
             val crop = captureManager.cropToRegion(frame, ScreenCaptureManager.RectFrac(area.left, area.top, area.right, area.bottom))
             val dropNoise = container.prefs.ocrDropNoise.first()
-            val result = runCatching { container.ocrEngine(twoPass = false, dropNoise = dropNoise).recognize(padForOcr(crop)) }.getOrNull()
+            val profile = container.textProfile()
+            val result = runCatching { container.ocrEngine(twoPass = false, dropNoise = dropNoise).recognize(padForOcr(crop)) }
+                .onFailure { if (it is io.github.wilsonnet.droidsentenceminer.ocr.OcrUnavailableException) unavailable = it.message }
+                .getOrNull()
                 ?: return@withContext emptyList()
             // Padding sits right/below the crop, so boxes are still crop px; drop reads in the padding.
             val read = SubtitleLineFilter.dropUnsure(result.lines)
                 .filter { it.box.centerX < crop.width && it.box.centerY < crop.height }
-            ScreenText.fromRead(read, read.map { it.box }, crop.width, crop.height, area, 0)
+            ScreenText.fromRead(read, read.map { it.box }, crop.width, crop.height, area, 0, profile)
         }
         if (lines.isEmpty()) {
-            toast("No Japanese text in the box")
+            toast(unavailable ?: "No text in the box")
             return 0
         }
         screenDictionary.showQuick(lines)
@@ -604,7 +629,7 @@ class OverlayService : Service() {
         }
         if (pendingAutoOcr) {
             pendingAutoOcr = false
-            autoOcr.start()
+            startAutoOcr()
         }
         if (pendingQuick) {
             pendingQuick = false
@@ -687,6 +712,19 @@ class OverlayService : Service() {
 
     // ------------------------------------------------------------ live text
 
+    /**
+     * Android's version of excluding a window from capture (Windows' `WDA_EXCLUDEFROMCAPTURE`):
+     * a FLAG_SECURE window is drawn black into MediaProjection frames and screenshots (including
+     * the accessibility one), so auto OCR over the whole screen doesn't read our own text back.
+     */
+    private fun secureFromCapture(params: WindowManager.LayoutParams) {
+        params.flags = if (hideFromCapture) {
+            params.flags or WindowManager.LayoutParams.FLAG_SECURE
+        } else {
+            params.flags and WindowManager.LayoutParams.FLAG_SECURE.inv()
+        }
+    }
+
     private fun showLiveWindow() {
         if (liveView != null || liveDismissed || !Settings.canDrawOverlays(this)) return
         val owner = OverlayLifecycleOwner().apply {
@@ -760,6 +798,7 @@ class OverlayService : Service() {
                 ?.takeIf { it != LiveMode.FULLSCREEN }
                 ?: LiveMode.NORMAL
             applyLiveMode(params)
+            secureFromCapture(params)
             runCatching { windowManager.addView(view, params) }
         }
     }
@@ -969,14 +1008,14 @@ class OverlayService : Service() {
         }
 
         val text = result.text.trim()
-        if (text.isBlank() || JapaneseTextScore.score(text) < 1.0) {
+        if (text.isBlank() || container.textProfile().score(text) < 1.0) {
             panelState.scanning = false
-            val status = "No Japanese text found (${result.elapsedMs} ms)"
+            val status = "No text found (${result.elapsedMs} ms)"
             panelState.status = status
             return ScanOutcome(text, result.elapsedMs, 0, status)
         }
 
-        val matches = container.lookup.scan(text)
+        val matches = container.scanText(text)
         panelState.ocrText = text
         panelState.matches = matches
         panelState.scanning = false
@@ -1088,7 +1127,7 @@ class OverlayService : Service() {
         },
         onBubbleMode = { mode ->
             panelState.bubbleMode = mode
-            scope.launch { container.prefs.setBubbleMode(mode.name.lowercase()) }
+            scope.launch { container.prefs.setBubbleMode(mode.preferenceValue) }
         },
     )
 
@@ -1119,7 +1158,7 @@ class OverlayService : Service() {
                 return@launch
             }
             panelState.ocrText = line.text
-            panelState.matches = container.lookup.scan(line.text)
+            panelState.matches = container.scanText(line.text)
             panelState.lineId = line.id
             lastCapture = container.textLog.screenshot(line)
             val clip = container.textLog.clip(line)
@@ -1135,7 +1174,7 @@ class OverlayService : Service() {
         panelState.definitionsHtml = null
         panelState.loadingDetails = true
         scope.launch {
-            val details = container.lookup.lookup(word)
+            val details = container.lookupWord(word)
             val html = container.miner.buildPopupHtml(word, details, isDarkMode(), cardPicker = false)
             panelState.selectedDetails = details
             panelState.definitionsHtml = html
